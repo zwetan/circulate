@@ -35,6 +35,9 @@ the terms of any one of the MPL, the GPL or the LGPL.
 
 package library.circulate
 {
+    import flash.net.GroupSpecifier;
+    import flash.net.NetGroup;
+
     /**
      * 
      */
@@ -42,6 +45,8 @@ package library.circulate
     {
         function get type():NodeType;
         function get name():String;
+        function get specificier():GroupSpecifier;
+        function get group():NetGroup;
         function get joined():Boolean;
         
         function join( password:String = "" ):void;
