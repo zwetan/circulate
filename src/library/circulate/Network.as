@@ -35,6 +35,7 @@ the terms of any one of the MPL, the GPL or the LGPL.
 
 package library.circulate
 {
+    import core.assert;
     import core.dump;
     import core.strings.endsWith;
     import core.strings.format;
@@ -48,8 +49,12 @@ package library.circulate
     import flash.net.NetGroup;
     import flash.net.ObjectEncoding;
     import flash.utils.ByteArray;
+    import flash.utils.Dictionary;
     import flash.utils.Timer;
     
+    import library.circulate.clients.Client;
+    import library.circulate.commands.ChatMessage;
+    import library.circulate.commands.JoinNode;
     import library.circulate.events.NetworkEvent;
     import library.circulate.nodes.ChatNode;
     import library.circulate.nodes.CommandCenter;
@@ -69,6 +74,8 @@ package library.circulate
     */
     public class Network extends EventDispatcher
     {
+        //--- static ---
+        
         public static function getDefaultConfiguration():NetworkConfiguration
         {
             var config:NetworkConfiguration;
@@ -100,27 +107,29 @@ package library.circulate
             return groupspec;
         }
         
-        public static function serialize( command:* ):Packet
+        public static function serialize( command:NetworkCommand ):Packet
         {
-            if( !(command is NetworkCommand) )
-            {
-                trace( command + " is not a NetworkCommand" );
-                return null;
-            }
-            
-            var netcmd:NetworkCommand = command as NetworkCommand;
+//            if( !(command is NetworkCommand) )
+//            {
+//                //_log( command + " is not a NetworkCommand" );
+//                return null;
+//            }
+//            
+//            var netcmd:NetworkCommand = command as NetworkCommand;
             
             var data:ByteArray = new ByteArray();
                 data.writeObject( command );
                 data.position = 0;
                 data.compress();
+                data.position = 0;
             
             var packet:Packet = new Packet( data );
             return packet;
         }
         
-        public static function deserialize( packet:Packet ):* //any NetworkCommand
+        public static function deserialize( packet:Packet ):NetworkCommand //any NetworkCommand
         {
+            packet.data.position = 0;
             packet.data.uncompress();
             packet.data.position = 0;
             
@@ -136,54 +145,67 @@ package library.circulate
             return null;
         }
         
+        public static function deserialize2( packet:* ):* //any NetworkCommand
+        {
+            if( packet && packet.data )
+            {
+                packet.data.uncompress();
+                packet.data.position = 0;
+                
+                var command:* = packet.data.readObject();
+                
+                if( command is NetworkCommand )
+                {
+                    //deserialize a NetworkCommand
+                    return command;
+                }
+            }
+            
+            //deserializer did not found a NetworkCommand
+            return null;
+        }
         
-        private var _config:NetworkConfiguration;
+        
+        //--- --- --- --- --- --- --- --- ---
+        
+        
         private var _type:NetworkType;
+        private var _config:NetworkConfiguration;
         
         private var _enableErrorChecking:Boolean;
         private var _afterAnalysis:Boolean;
         
         private var _connection:NetConnection;
-        private var _nodes:Vector.<NetworkNode>;
         private var _commandCenter:CommandCenter;
+        private var _local:Client;
+        
+        private var _nodes:Vector.<NetworkNode>;
+        private var _clients:Vector.<NetworkClient>;
         
         private var _timer:Timer;
         
+        public var writer:Function;
         
         public function Network( type:NetworkType = null , config:NetworkConfiguration = null )
         {
             if( !type ) { type = NetworkType.local; }
             if( !config ) { config = Network.getDefaultConfiguration(); }
             
-            _warnAboutServerKey();
-            
-            _config              = config;
             _type                = type;
+            _config              = config;
             _enableErrorChecking = _config.enableErrorChecking;
             _afterAnalysis       = false;
             
             _nodes               = new Vector.<NetworkNode>();
+            _clients             = new Vector.<NetworkClient>();
             
+            _local               = new Client( _config.username );
             _timer               = new Timer( _config.connectionTimeout );
+            
+            writer               = trace;
         }
         
         //--- events ---
-        
-        private function _warnAboutServerKey():void
-        {
-            if( (type == NetworkType.internet) && (config.serverKey == "") )
-            {
-                _warn( NetworkStrings.serverKeyEmpty );
-            }
-        }
-        
-        private function _startTimeout():void
-        {
-            _timer.addEventListener( TimerEvent.TIMER_COMPLETE, onTimeout );
-            _timer.delay       = _config.connectionTimeout;
-            _timer.repeatCount = 1;
-            _timer.start();
-        }
         
         public function onNetStatus( event:NetStatusEvent ):void
         {
@@ -191,7 +213,7 @@ package library.circulate
             var reason:String = "";
             
             //trace( dump( event, true ) );
-            trace( "network netstatus code: " + event.info.code );
+            _log( "network netstatus code: " + event.info.code );
             
             switch( code )
             {
@@ -263,7 +285,8 @@ package library.circulate
                    The info.group property indicates which NetGroup has succeeded.
                 */
                 case "NetGroup.Connect.Success": // event.info.group
-                onGroupConnect( event.info.group );
+                _log( "--- NetGroup.Connect.Success ---" );
+                onGroupConnect( event.info.group as NetGroup );
                 break;
                 
                 /* The NetGroup connection attempt failed.
@@ -295,6 +318,26 @@ package library.circulate
                 onNeighborDisconnect( event.info.peerID, event.info.neighbor );
                 break;
                 
+                /* Sent when a message directed to this node is received.
+                   The info.message:Object property is the message.
+                   The info.from:String property is the groupAddress from which the message was received.
+                   The info.fromLocal:Boolean property is TRUE if the message was sent by this node
+                   (meaning the local node is the nearest to the destination group address),
+                   and FALSE if the message was received from a different node.
+                   To implement recursive routing, the message must be resent with NetGroup.sendToNearest() 
+                   if info.fromLocal is FALSE.
+                */
+                case "NetGroup.SendTo.Notify": // event.info.message, event.info.from, event.info.fromLocal
+                break;
+                
+                /* Sent when a new Group Posting is received.
+                   The info.message:Object property is the message.
+                   The info.messageID:String property is this message's messageID.
+                */
+                case "NetGroup.Posting.Notify": // event.info.message, event.info.messageID
+                onPostingNotify( event.info.messageID, event.info.message );
+                //onPostingNotify2( event );
+                break;
                 
             }
             
@@ -320,14 +363,15 @@ package library.circulate
                 _info( ">> motd: " + motd + " <<" );
             }
             
-            _info( "peer ID = " + _connection.nearID );
+            _local.peerID = _connection.nearID;
+            _info(  _local + " (peer ID = " + _local.peerID + ")" );
             _createCommandCenter();
             
             dispatchEvent( new NetworkEvent( NetworkEvent.CONNECTED ) );
             
             if( _config.connectionTimeout > 0 )
             {
-                trace( "use a timeout of " + _config.connectionTimeout + "ms" );
+                _log( "use a timeout of " + _config.connectionTimeout + "ms" );
                 _startTimeout();
             }
         }
@@ -353,7 +397,19 @@ package library.circulate
         
         private function onGroupConnect( netgroup:NetGroup ):void
         {
+            _log( "---- Group Connect ----" );
+            var node:NetworkNode = _findNodeByGroup( netgroup );
             
+            if( node )
+            {
+                _log( "name: " + node.name );
+                _log( "type: " + node.type.toString() );
+                _log( "members: " + node.group.estimatedMemberCount );
+            }
+            else
+            {
+                _error( "Could not find Node for " + netgroup );
+            }
         }
         
         private function onGroupDisconnect( netgroup:NetGroup, message:String = "" ):void
@@ -363,16 +419,177 @@ package library.circulate
         
         private function onNeighborConnect( peerID:String, address:String ):void
         {
+            _log( "---- Neighbor Connect ----" );
+            var node:NetworkNode = _findNodeByPeerIDAndAddress( peerID, address );
+            
+            if( !_hasClient( peerID ) )
+            {
+                var client:NetworkClient = new Client( "", peerID );
+                _addClient( client );
+            }
+            
+            if( node )
+            {
+                _log( "peer ID: " + peerID );
+                _log( "joined " + node.name );
+                _log( "type: " + node.type.toString() );
+                _log( "members: " + node.group.estimatedMemberCount );
+                //_findClientByPeerID( peerID );
+                
+                _log( "group connect -> join node" );
+                var cmd:NetworkCommand = new JoinNode( _local.username, _local.peerID );
+                sendCommandToNode( cmd, node );
+                
+//                if( node.type == NodeType.chat )
+//                {
+                    _log( "group connect -> chat message" );
+                    var chat:ChatMessage = new ChatMessage( "hello world", node.name );
+                    sendCommandToNode( chat, node );
+//                }
+            }
+            else
+            {
+                _error( "Could not find Node for " + peerID );
+            }
             
         }
         
         private function onNeighborDisconnect( peerID:String, address:String ):void
         {
+            var node:NetworkNode = _findNodeByPeerIDAndAddress( peerID, address );
             
+            if( _hasClient( peerID ) )
+            {
+                var client:NetworkClient = _findClientByPeerID( peerID );
+                var index:uint = _findClientIndex( client );
+                _removeClient( index );
+            }
+            
+            if( node )
+            {
+                _log( "peer ID: " + peerID );
+                _log( "left " + node.name );
+            }
+        }
+        
+        private function onPostingNotify2( event:NetStatusEvent ):void
+        {
+            var netgroup:NetGroup = event.target as NetGroup;
+//            _log( "netgroup = " + netgroup );
+            var id:String = event.info.messageID;
+//            _log( "id = " + id );
+            var message:Object = event.info.message;
+//            _log( "message = " + message );
+            
+            var packet:Packet = message as Packet;
+//            _log( "packet = " + packet );
+//            _log( "  |_ id: " + packet.id );
+//            _log( "  |_ data: " + packet.data );
+//            _log( "" );
+            
+            var cmd:NetworkCommand = Network.deserialize( packet );
+//            _log( "cmd = " + cmd );
+            
+            if( cmd )
+            {
+                _interpretCommands( cmd );
+            }
+        }
+        
+        private function onPostingNotify( id:String, message:Object ):void
+        {
+            _log( "received packet" );
+            _log( "id = " + id );
+//            _log( "message = " + message );
+            
+            var packet:Packet = message as Packet;
+//            _log( "packet = " + packet );
+//            _log( "  |_ id: " + packet.id );
+//            _log( "  |_ data: " + packet.data );
+//            _log( "" );
+            
+            var cmd:NetworkCommand = Network.deserialize( packet );
+//            _log( "cmd = " + cmd );
+            
+            if( cmd )
+            {
+                _interpretCommands( cmd );
+            }
         }
         
         
+        private function _interpretCommands( cmd:NetworkCommand ):void
+        {
+//            _log( ">>> interpreting command" );
+//            _log( "is network command: " + (cmd is NetworkCommand) );
+//            _log( "command [" + cmd.name + "]" );
+            
+            switch( cmd.type )
+            {
+                case CommandType.joinNode:
+                var command1:JoinNode = cmd as JoinNode;
+                _log( "command [" + command1.name + "]" );
+                _log( "  |_ username: " + command1.username );
+                _log( "  |_ peerID: " + command1.peerID );
+                
+                var client:NetworkClient = _findClientByPeerID( command1.peerID );
+                if( client && (client.username == "") )
+                {
+                    client.username = command1.username;
+                    _log( "[system] : " + client.username + " arrived" );
+                }
+                break;
+                
+                case CommandType.chatMessage:
+                var command2:ChatMessage = cmd as ChatMessage;
+                _log( "command [" + command2.name + "]" );
+                _log( "  |_ message: " + command2.message );
+                _log( "  |_ nodename: " + command2.nodename );
+                break;
+                
+                default:
+                _error( "command [" + cmd.type + "] could not be interpreted" );
+            }
+            
+            
+//            switch( cmd.type )
+//            {
+//                case CommandType.chatMessage:
+//                var command:ChatMessage = cmd as ChatMessage;
+//                _log( "[command center] - received [ChatMessage] from \"\"" );
+//                //trace( "command is [ChatMessage] = " + (command is ChatMessage) );
+//                //trace( command.user + ": " + command.message );
+//                //_log( command.user + ": " + command.message );
+//                break;
+//                
+//                default:
+//                //trace( "command type notfound" );
+//                _error( "command \"" + cmd.type + "\" could not be interpreted" );
+//            }
+        }
+        
         //--- private ---
+        
+        private function _log( message:String ):void
+        {
+            writer( message );
+        }
+        
+        private function _warnAboutServerKey():void
+        {
+            if( (type == NetworkType.internet) && (config.serverKey == "") )
+            {
+                _warn( NetworkStrings.serverKeyEmpty );
+            }
+        }
+        
+        private function _startTimeout():void
+        {
+            _timer.addEventListener( TimerEvent.TIMER_COMPLETE, onTimeout );
+            _timer.delay       = _config.connectionTimeout;
+            _timer.repeatCount = 1;
+            _timer.start();
+        }
         
         private function _getTypeNetwork():String
         {
@@ -386,14 +603,14 @@ package library.circulate
         
         private function _info( message:String ):void
         {
-            trace( _getTypeNetwork() + " network : " +  message );
+            _log( _getTypeNetwork() + " network : " +  message );
         }
         
         private function _warn( message:String ):void
         {
             if( !enableErrorChecking )
             {
-                trace( "## WARNING : " +  message + " ##" );
+                _log( "## WARNING : " +  message + " ##" );
             }
         }
         
@@ -405,7 +622,7 @@ package library.circulate
             }
             else
             {
-                trace( "## ERROR : " +  message + " ##" );
+                _log( "## ERROR : " +  message + " ##" );
             }
         }
         
@@ -430,6 +647,11 @@ package library.circulate
             
             return false;
         }
+        
+        public function get client():NetworkClient { return _local; }
+        public function get clients():Vector.<NetworkClient> { return _clients; }
+        
+        public function get nodes():Vector.<NetworkNode> { return _nodes; }
         
         public function connect( server:String = "", key:String = "" ):void
         {
@@ -512,31 +734,141 @@ package library.circulate
             }
         }
         
-        private function _findNode( name:String ):NetworkNode
-        {
-            var i:uint;
-            var n:NetworkNode;
-            
-            for( i=0; i<_nodes.length; i++ )
-            {
-                n = _nodes[i];
-                
-                trace( "node name = [" + n.name + "]" );
-                trace( "     name = [" + name + "]" );
-                
-                if( n.name == name ) { return n; }
-            }
-            
-            return null;
-        }
-        
         private function _createCommandCenter():void
         {
             createNode( config.commandCenter, NodeType.command );
         }
         
+        private function _addNode( node:NetworkNode ):void
+        {
+            _nodes.push( node );
+        }
+        
+        private function _removeNode( index:uint ):void
+        {
+            _nodes.splice( index, 1 );
+        }
+        
+        private function _findNode( name:String ):NetworkNode
+        {
+            var i:uint;
+            var node:NetworkNode;
+            for( i = 0; i<_nodes.length; i++ )
+            {
+                node = _nodes[ i ];
+                
+                if( node.name == name )
+                {
+                    return node;
+                }
+            }
+            
+            return null;
+        }
+        
+        private function _findNodeByGroup( netgroup:NetGroup ):NetworkNode
+        {
+            var i:uint;
+            var node:NetworkNode;
+            for( i = 0; i<_nodes.length; i++ )
+            {
+                node = _nodes[ i ];
+                
+                if( node.group == netgroup )
+                {
+                    return node;
+                }
+            }
+            
+            return null;
+        }
+        
+        private function _findNodeByPeerIDAndAddress( peerID:String, address:String ):NetworkNode
+        {
+            var i:uint;
+            var node:NetworkNode;
+            var groupaddress:String;
+            
+            for( i=0; i<_nodes.length; i++ )
+            {
+                node = _nodes[i];
+                groupaddress = node.group.convertPeerIDToGroupAddress( peerID );
+                
+                if( groupaddress == address )
+                {
+                    return node;
+                }
+            }
+            
+            return null;
+        }
+        
+        
+        private function _addClient( client:NetworkClient ):void
+        {
+            _clients.push( client );
+        }
+        
+        private function _removeClient( index:uint ):void
+        {
+            _clients.splice( index, 1 );
+        }
+        
+        private function _hasClient( peerID:String ):Boolean
+        {
+            if( !connected ) { return false; }
+            
+            if( _nodes.length == 0 ) { return false; }
+            
+            var client:NetworkClient = _findClientByPeerID( peerID );
+            
+            if( client )
+            {
+                return true;
+            }
+            
+            return false;
+        }
+        
+        private function _findClientByPeerID( peerID:String ):NetworkClient
+        {
+            var i:uint;
+            var client:NetworkClient;
+            
+            for( i=0; i<_clients.length; i++ )
+            {
+                client = _clients[i];
+                
+                if( client.peerID == peerID )
+                {
+                    return client;
+                }
+            }
+            
+            return null;
+        }
+        
+        private function _findClientIndex( client:NetworkClient ):uint
+        {
+            var i:uint;
+            var c:NetworkClient;
+            
+            for( i=0; i<_clients.length; i++ )
+            {
+                c = _clients[i];
+                
+                if( c == client )
+                {
+                    return i;
+                }
+            }
+            
+            return null;
+        }
+        
         public function createNode( name:String, type:NodeType = null ):void
         {
+            _log( ">>> creating Node \""+ name +"\"");
             if( !connected )
             {
                 _info( "you need to connect first before joining a node." );
@@ -556,13 +888,15 @@ package library.circulate
                 switch( type )
                 {
                     case NodeType.command:
+                    trace( "CREATE NodeType.command" );
                     node = new CommandCenter( this, name );
                     _commandCenter = node as CommandCenter;
                     break;
                     
-//                    case NodeType.chat:
-//                    node = new ChatNode( this, name );
-//                    break;
+                    case NodeType.chat:
+                    trace( "CREATE NodeType.chat" );
+                    node = new ChatNode( this, name );
+                    break;
                     
 //                    case NodeType.swarm:
 //                    node = new SwarmNode( this );
@@ -573,8 +907,15 @@ package library.circulate
 //                    break;
                 }
                 
-                _nodes.push( node );
-                node.join();
+                if( node )
+                {
+                    _addNode( node );
+                    node.join();
+                }
+                else
+                {
+                    _error( "can not create this type of Node: " + type.toString() );
+                }
             }
         }
         
@@ -604,7 +945,7 @@ package library.circulate
             }
             else
             {
-                
+                _log( "Could not join Node \"" + name + "\"" );
             }
         }
         
@@ -618,8 +959,44 @@ package library.circulate
             }
             else
             {
-                
+                _log( "Could not leave Node \"" + name + "\"" );
             }
+        }
+        
+        private function _sendPacketToNode( packet:Packet, node:NetworkNode ):void
+        {
+            var messageID:String = node.group.post( packet );
+            
+            if( messageID == null )
+            {
+                _log( "message was not sent - not received message ID" );
+            }
+            else
+            {
+                _log( "message " + messageID + " sent." );
+                //onPostingNotify( messageID, packet );
+            }
+        }
+        
+        public function sendCommandToNode( command:NetworkCommand, node:NetworkNode = null ):void
+        {
+//            if( !node && _commandCenter )
+//            {
+//                node = _commandCenter;
+//            }
+//            else
+//            {
+//                _log( "could not find a Node to send the command" );
+//                return;
+//            }
+            
+            //_log( "sending command [" + command.name + "]" );
+//            _log( "sending command: " + command );
+//            _log( "to node: \"" + node.name + "\" (" + node.type + ")" );
+            
+            var p:Packet = Network.serialize( command );
+//            _log( "packet " + p.id + " : data " + p.data.length + " bytes" ); 
+            _sendPacketToNode( p, node );
         }
         
         public function resetTimeout():void
