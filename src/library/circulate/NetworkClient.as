@@ -40,6 +40,10 @@ package library.circulate
      */
     public interface NetworkClient
     {
+        function get username():String;
+        function set username( value:String ):void;
         
+        function get peerID():String;
+        function set peerID( value:String ):void;
     }
 }
