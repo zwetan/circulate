@@ -33,27 +33,29 @@ package library.circulate.nodes
             _specifier = specifier;
         }
         
-        private function onNetStatus( event:NetStatusEvent ):void
-        {
-            var code:String   = event.info.code;
-            var reason:String = "";
-            
-            //trace( dump( event, true ) );
-            //trace( _type.toString() + " netstatus code: " + event.info.code );
-            
-            switch( code )
-            {
-                
-                
-            }
-            
-        }
+//        private function onNetStatus( event:NetStatusEvent ):void
+//        {
+//            var code:String   = event.info.code;
+//            var reason:String = "";
+//            
+//            //trace( dump( event, true ) );
+//            
+//            var log:Function = _network.writer;
+//            
+//            log( _type.toString() + " netstatus code: " + event.info.code );
+//            
+//            switch( code )
+//            {
+//                
+//                
+//            }
+//            
+//        }
         
         public function get type():NodeType { return _type; }
-        public function get group():NetGroup { return _group; }
-        public function get specificier():GroupSpecifier { return _specifier; }
         public function get name():String { return _name; }
-        
+        public function get specificier():GroupSpecifier { return _specifier; }
+        public function get group():NetGroup { return _group; }
         public function get joined():Boolean { return _joined; }
         
         public function join( password:String = "" ):void
