@@ -1,6 +1,7 @@
 package library.circulate
 {
     import library.circulate.commands.ChatMessage;
+    import library.circulate.commands.JoinNode;
 
     public class CommandType
     {
@@ -12,7 +13,7 @@ package library.circulate
         public static const disconnectNetwork:CommandType = new CommandType( 0x012, "disconnectNetwork", null );
         
         //node - 0x-20
-        public static const joinNode:CommandType          = new CommandType( 0x021, "joinNode", null );
+        public static const joinNode:CommandType          = new CommandType( 0x021, "joinNode", JoinNode );
         public static const leaveNode:CommandType         = new CommandType( 0x022, "leaveNode", null );
         
         //chat - 0x1-0
