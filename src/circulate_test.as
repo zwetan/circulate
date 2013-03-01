@@ -37,10 +37,14 @@ package
 {
     import flash.display.DisplayObject;
     import flash.display.Sprite;
+    import flash.events.Event;
     import flash.geom.ColorTransform;
+    import flash.utils.setTimeout;
     
     import library.circulate.Network;
+    import library.circulate.NetworkClient;
     import library.circulate.NetworkConfiguration;
+    import library.circulate.NetworkNode;
     import library.circulate.NetworkType;
     import library.circulate.events.NetworkEvent;
     import library.circulate.utils.getLocalUserName;
@@ -48,24 +52,27 @@ package
 
     [ExcludeClass]
     [SWF(width="800", height="600", frameRate="24", backgroundColor="#ffcc00")]
-    public class circulate_test extends Sprite
+    public class circulate_test extends circulate_ui
     {
         
         
         public var config:NetworkConfiguration;
         public var localAreaNetwork:Network;
         
-        //UI
-        public var connectionDot:Sprite; 
-        
         public function circulate_test()
         {
-            _buildConnectionUI();
-            addChild( connectionDot);
-            connectionDot.x = stage.stageWidth - ( connectionDot.width + 5 );
-            connectionDot.y = ( connectionDot.height + 10 );
-            _colorize( connectionDot, 0xcccccc );
             
+        }
+        
+        private function _randomRange( minNum:Number, maxNum:Number ):Number   
+        {  
+            return ( Math.floor(Math.random() * (maxNum - minNum + 1)) + minNum );  
+        }
+        
+        
+        public override function main():void
+        {
+            super.main();
             
             /* You have 2 ways to create your config
                
@@ -89,6 +96,7 @@ package
             //config.serverKey = "503a63139c4a687fc822004e-7d1c016995c5";
             
             localAreaNetwork = new Network( NetworkType.local, config );
+            localAreaNetwork.writer = writeline;
             //localAreaNetwork = new Network();
             
             trace( "username: " + localAreaNetwork.config.username );
@@ -103,44 +111,54 @@ package
             //localAreaNetwork.connect( config.adobeServer );
             
             localAreaNetwork.connect();
-            //localAreaNetwork.createNode( "test" );
-            
         }
         
-        private function _randomRange( minNum:Number, maxNum:Number ):Number   
-        {  
-            return ( Math.floor(Math.random() * (maxNum - minNum + 1)) + minNum );  
-        }
-        
-        private function _buildConnectionUI():void
+        private function onLoop( event:Event ):void
         {
-            connectionDot = new Sprite();
-            connectionDot.graphics.clear();
-            connectionDot.graphics.beginFill( 0x000000, 1.0 );
-            connectionDot.graphics.drawRoundRect( 0, 0, 16, 16, 16, 16 );
-            connectionDot.graphics.endFill();
+            clearBackground();
             
-        }
-        
-        private function _colorize( target:DisplayObject, color:uint ):void
-        {
-            var ct:ColorTransform = new ColorTransform();
-                ct.color = color;
+            var i:uint;
+            var node:NetworkNode;
+            var client:NetworkClient;
             
-            target.transform.colorTransform = ct;
+            writelineToBackground( "nodes:" );
+            writelineToBackground( "------" );
+            for( i=0; i<localAreaNetwork.nodes.length; i++ )
+            {
+                node = localAreaNetwork.nodes[i];
+                writelineToBackground( node.name );
+            }
+            
+            writelineToBackground( "" );
+            
+            writelineToBackground( "clients:" );
+            writelineToBackground( "--------" );
+            writelineToBackground( "[*]: " + localAreaNetwork.client.username );
+            for( i=0; i<localAreaNetwork.clients.length; i++ )
+            {
+                client = localAreaNetwork.clients[i];
+                writelineToBackground( "["+i+"]: " + client.username );
+            }
         }
         
         
         public function onNetworkConnect( event:NetworkEvent ):void
         {
             trace( "test connected" );
-            _colorize( connectionDot, 0x00ff00 );
+            updateUsername( localAreaNetwork.client.username );
+            updatePeerID( localAreaNetwork.client.peerID );
+            updateConnection( 0x00ff00 );
+            
+            var dolater1:uint = setTimeout( function():void { localAreaNetwork.createNode( "test" ); }, 10000 ); 
+            
+            addEventListener( Event.ENTER_FRAME, onLoop );
         }
         
         public function onNetworkDisconnect( event:NetworkEvent ):void
         {
             trace( "test disconnected" );
-            _colorize( connectionDot, 0xff0000 );
+            updateConnection( 0xff0000 );
+            removeEventListener( Event.ENTER_FRAME, onLoop );
         }
         
     }
