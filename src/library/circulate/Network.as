@@ -54,6 +54,7 @@ package library.circulate
     
     import library.circulate.clients.Client;
     import library.circulate.commands.ChatMessage;
+    import library.circulate.commands.ConnectNetwork;
     import library.circulate.commands.JoinNode;
     import library.circulate.events.NetworkEvent;
     import library.circulate.nodes.ChatNode;
@@ -80,6 +81,7 @@ package library.circulate
         {
             var config:NetworkConfiguration;
                 config = new NetworkConfiguration();
+                config.loopback            = true;
                 config.enableErrorChecking = false;
                 config.username            = getLocalUserName();
                 config.localArea           = "rtmfp:";
@@ -328,6 +330,7 @@ package library.circulate
                    if info.fromLocal is FALSE.
                 */
                 case "NetGroup.SendTo.Notify": // event.info.message, event.info.from, event.info.fromLocal
+                onSendToNotify( event.info.from, event.info.message, event.info.fromLocal );
                 break;
                 
                 /* Sent when a new Group Posting is received.
@@ -436,15 +439,22 @@ package library.circulate
                 _log( "members: " + node.group.estimatedMemberCount );
                 //_findClientByPeerID( peerID );
                 
-                _log( "group connect -> join node" );
-                var cmd:NetworkCommand = new JoinNode( _local.username, _local.peerID );
-                sendCommandToNode( cmd, node );
-                
-//                if( node.type == NodeType.chat )
+//                _log( "group connect -> join node" );
+//                var cmd:NetworkCommand = new JoinNode( _local.username, _local.peerID );
+//                sendCommandToNode( cmd, node );
+//                
+////                if( node.type == NodeType.chat )
+////                {
+//                    _log( "group connect -> chat message" );
+//                    var chat:ChatMessage = new ChatMessage( "hello world", node.name );
+//                    sendCommandToNode( chat, node );
+////                }
+
+//                if( node.type == NodeType.command )
 //                {
-                    _log( "group connect -> chat message" );
-                    var chat:ChatMessage = new ChatMessage( "hello world", node.name );
-                    sendCommandToNode( chat, node );
+                    var now:Date = new Date();
+                    var timestamp:uint = now.valueOf();
+                    var cmd:NetworkCommand = new ConnectNetwork( _local.username, _local.peerID, timestamp )
 //                }
             }
             else
@@ -498,7 +508,51 @@ package library.circulate
         
         private function onPostingNotify( id:String, message:Object ):void
         {
-            _log( "received packet" );
+/*
+		private function handlePosting(event:NetStatusEvent):void
+		{
+			var message:MessageVO = event.info.message as MessageVO;
+				
+			if (!message)
+				return;
+			
+			var group:NetGroup = event.target as NetGroup; 
+			var groupInfo:GroupInfo = groups[group];
+			
+			if (message.type == CommandType.SERVICE) 
+			{
+				if (message.command == CommandList.ANNOUNCE_NAME) 
+				{
+					for each (var client:ClientVO in groupInfo.clients) 
+					{
+						if(client.groupID == message.client.groupID) 
+						{
+							client.clientName = message.client.clientName;
+							dispatchEvent(new ClientEvent(ClientEvent.CLIENT_UPDATE, client, group));
+							break;
+						}
+					}
+				}
+				else if (message.command == CommandList.ANNOUNCE_SHARING)
+				{
+					dispatchEvent(new ObjectEvent(ObjectEvent.OBJECT_ANNOUNCED, message.data as ObjectMetadataVO));
+				}
+				else if (message.command == CommandList.REQUEST_OBJECT)
+				{
+					dispatchEvent(new ObjectEvent(ObjectEvent.OBJECT_REQUEST, message.data as ObjectMetadataVO));
+				}
+				else if (message.command == CommandList.ACCELEROMETER)
+				{
+					dispatchEvent(new MessageEvent(MessageEvent.DATA_RECEIVED, message, group));
+				}
+			} 
+			else 
+			{
+				dispatchEvent(new MessageEvent(MessageEvent.DATA_RECEIVED, message, group));
+			}
+		}	
+*/
+            _log( "received packet via POST" );
             _log( "id = " + id );
 //            _log( "message = " + message );
             
@@ -508,13 +562,59 @@ package library.circulate
 //            _log( "  |_ data: " + packet.data );
 //            _log( "" );
             
-            var cmd:NetworkCommand = Network.deserialize( packet );
+            var cmd:NetworkCommand;
+            
+            if( packet )
+            {
+                cmd = Network.deserialize( packet );
+            }
+            else
+            {
+                _log( "packet is null" );
+            }
 //            _log( "cmd = " + cmd );
             
             if( cmd )
             {
                 _interpretCommands( cmd );
             }
+            else
+            {
+                _log( "cmd is null" );
+            }
+        }
+        
+        private function onSendToNotify( address:String, message:Object, isLocal:Boolean = false ):void
+        {
+            _log( "received packet via SEND" );
+            
+            var packet:Packet = message as Packet;
+            _log( "packet = " + packet );
+            _log( "  |_ id: " + packet.id );
+            _log( "  |_ data: " + packet.data );
+            _log( "" );
+            
+            var cmd:NetworkCommand;
+            
+            if( packet )
+            {
+                cmd = Network.deserialize( packet );
+            }
+            else
+            {
+                trace( "packet is null" );
+            }
+//            _log( "cmd = " + cmd );
+            
+            if( cmd )
+            {
+                _interpretCommands( cmd );
+            }
+            else
+            {
+                trace( "cmd is null" );
+            }
+            
         }
         
         
@@ -524,15 +624,35 @@ package library.circulate
 //            _log( "is network command: " + (cmd is NetworkCommand) );
 //            _log( "command [" + cmd.name + "]" );
             
+            var client:NetworkClient;
+            
             switch( cmd.type )
             {
+                case CommandType.connectNetwork:
+                var command0:ConnectNetwork = cmd as ConnectNetwork;
+                _log( "command [" + command1.name + "]" );
+                _log( "  |_ username: " + command0.username );
+                _log( "  |_ peerID: " + command0.peerID );
+                _log( "  |_ timestamp: " + command0.timestamp );
+                
+                client = _findClientByPeerID( command0.peerID );
+                var date:Date = new Date( command0.timestamp );
+                if( client && (client.username == "") )
+                {
+                    client.username = command0.username;
+                }
+                
+                _log( "[system] : <" + client.username + "> connected to [" + _getTypeNetwork() + " network] @ " + date.toString()  );
+                
+                break;
+                
                 case CommandType.joinNode:
                 var command1:JoinNode = cmd as JoinNode;
                 _log( "command [" + command1.name + "]" );
                 _log( "  |_ username: " + command1.username );
                 _log( "  |_ peerID: " + command1.peerID );
                 
-                var client:NetworkClient = _findClientByPeerID( command1.peerID );
+                client = _findClientByPeerID( command1.peerID );
                 if( client && (client.username == "") )
                 {
                     client.username = command1.username;
@@ -980,15 +1100,15 @@ package library.circulate
         
         public function sendCommandToNode( command:NetworkCommand, node:NetworkNode = null ):void
         {
-//            if( !node && _commandCenter )
-//            {
-//                node = _commandCenter;
-//            }
-//            else
-//            {
-//                _log( "could not find a Node to send the command" );
-//                return;
-//            }
+            if( !node && _commandCenter )
+            {
+                node = _commandCenter;
+            }
+            else
+            {
+                _log( "could not find a Node to send the command" );
+                return;
+            }
             
             //_log( "sending command [" + command.name + "]" );
 //            _log( "sending command: " + command );

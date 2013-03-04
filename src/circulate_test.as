@@ -35,6 +35,8 @@ the terms of any one of the MPL, the GPL or the LGPL.
 
 package
 {
+    import core.strings.startsWith;
+    
     import flash.display.DisplayObject;
     import flash.display.Sprite;
     import flash.events.Event;
@@ -43,15 +45,17 @@ package
     
     import library.circulate.Network;
     import library.circulate.NetworkClient;
+    import library.circulate.NetworkCommand;
     import library.circulate.NetworkConfiguration;
     import library.circulate.NetworkNode;
     import library.circulate.NetworkType;
+    import library.circulate.commands.ChatMessage;
     import library.circulate.events.NetworkEvent;
     import library.circulate.utils.getLocalUserName;
     import library.circulate.utils.traceNetworkInterfaces;
 
     [ExcludeClass]
-    [SWF(width="800", height="600", frameRate="24", backgroundColor="#ffcc00")]
+    [SWF(width="800", height="400", frameRate="24", backgroundColor="#ffcc00")]
     public class circulate_test extends circulate_ui
     {
         
@@ -67,6 +71,90 @@ package
         private function _randomRange( minNum:Number, maxNum:Number ):Number   
         {  
             return ( Math.floor(Math.random() * (maxNum - minNum + 1)) + minNum );  
+        }
+        
+        protected override function _interpret( line:String ):void
+        {
+            var command:NetworkCommand;
+            var cmd:String = "";
+            var c:String = "";
+            var i:uint   = 0;
+            
+//            trace( "line starts with \\ = " + (startsWith( line, "\\" )) );
+            
+            //is it a command ?
+            if( startsWith( line, "\\" ) )
+            {
+                line = line.substr( 1 );
+//                trace( "1-line = [" + line + "]" );
+                c = line.charAt( i );
+                
+                while( c != " " )
+                {
+                    c = line.charAt( i++ );
+//                    trace( "c=" + c );
+                    if( line.length == i-1 )
+                    {
+                        break;
+                    }
+                }
+                
+                cmd  = line.substr( 0, i-1 );
+                line = line.substr( i );
+//                trace( "cmd = [" + cmd + "]" );
+//                trace( "line = [" + line + "]" );
+                interpret( cmd, line );
+            }
+            else
+            {
+//                trace( "chat = [" + line + "]" );
+                interpret( "chat", line );
+            }
+        }
+        
+        public function interpret( command:String, line:String ):void
+        {
+            var username:String = localAreaNetwork.client.username;
+            var netcmd:NetworkCommand;
+            var sendcmd:Boolean = true;
+            
+            switch( command )
+            {
+                case "test":
+                writeline( "## user [" + username + "] is testing \"" + line + "\"" );
+                sendcmd = false;
+                break;
+                
+                case "node":
+                localAreaNetwork.createNode( line );
+                break;
+                
+                case "nodechat":
+                var nodename:String;
+                var lines:Array = line.split( " " );
+                nodename = lines.shift();
+                line = lines.join( " " );
+                netcmd = new ChatMessage( line, nodename );
+                break;
+                
+                case "chat":
+                netcmd = new ChatMessage( line );
+                break;
+                
+                case "clear":
+                clearConsole();
+                break;
+                
+                default:
+                writeline( "## command \"" + command + "\" can not be interpreted" );
+                sendcmd = false;
+            }
+            
+            if( sendcmd && netcmd)
+            {
+                localAreaNetwork.sendCommandToNode( netcmd );
+            }
+            
         }
         
         
@@ -111,6 +199,8 @@ package
             //localAreaNetwork.connect( config.adobeServer );
             
             localAreaNetwork.connect();
+//            var sec:uint = _randomRange( 0, 30 );
+//            var dolater0:uint = setTimeout( function():void { localAreaNetwork.connect(); }, (sec*1000) );
         }
         
         private function onLoop( event:Event ):void
@@ -149,7 +239,7 @@ package
             updatePeerID( localAreaNetwork.client.peerID );
             updateConnection( 0x00ff00 );
             
-            var dolater1:uint = setTimeout( function():void { localAreaNetwork.createNode( "test" ); }, 10000 ); 
+            //var dolater1:uint = setTimeout( function():void { localAreaNetwork.createNode( "test" ); }, 10000 ); 
             
             addEventListener( Event.ENTER_FRAME, onLoop );
         }

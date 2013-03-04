@@ -1,6 +1,7 @@
 package library.circulate
 {
     import library.circulate.commands.ChatMessage;
+    import library.circulate.commands.ConnectNetwork;
     import library.circulate.commands.JoinNode;
 
     public class CommandType
@@ -9,7 +10,7 @@ package library.circulate
         public static const keepAlive:CommandType         = new CommandType( 0x000, "keepAlive", null );
         
         //network - 0x-10
-        public static const connectNetwork:CommandType    = new CommandType( 0x011, "connectNetwork", null );
+        public static const connectNetwork:CommandType    = new CommandType( 0x011, "connectNetwork", ConnectNetwork );
         public static const disconnectNetwork:CommandType = new CommandType( 0x012, "disconnectNetwork", null );
         
         //node - 0x-20

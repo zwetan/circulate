@@ -5,11 +5,15 @@ package
     import flash.display.StageAlign;
     import flash.display.StageScaleMode;
     import flash.events.Event;
+    import flash.events.KeyboardEvent;
     import flash.events.UncaughtErrorEvent;
     import flash.geom.ColorTransform;
+    import flash.text.AntiAliasType;
     import flash.text.TextField;
+    import flash.text.TextFieldType;
     import flash.text.TextFormat;
     import flash.text.TextFormatAlign;
+    import flash.ui.Keyboard;
     
     [ExcludeClass]
     [SWF(width="800", height="600", frameRate="24", backgroundColor="#ffcc00")]
@@ -23,6 +27,7 @@ package
         
         public var bgoutput:TextField;
         public var output:TextField;
+        public var input:TextField;
         
         public function circulate_ui()
         {
@@ -88,13 +93,35 @@ package
             connectionDot.x = stage.stageWidth - ( connectionDot.width + 5 );
             connectionDot.y = ( 2 );
 
-            bgoutput.width  = stage.stageWidth;
-            bgoutput.height = stage.stageHeight - ( 40 );
+            bgoutput.width  = stage.stageWidth - 1;
+            bgoutput.height = stage.stageHeight - ( 40 ) - 20 - 1;
             bgoutput.y      =  undertitle.y + undertitle.height;
             
-            output.width  = stage.stageWidth;
-            output.height = stage.stageHeight - ( 40 );
+            output.width  = stage.stageWidth - 1;
+            output.height = stage.stageHeight - ( 40 ) - 20 - 1;
             output.y      =  undertitle.y + undertitle.height;
+            
+            input.width   = stage.stageWidth - 1;
+            input.height  = 20;
+            input.y       = output.y + output.height;
+        }
+        
+       private function onKeyDown( event:KeyboardEvent ):void
+        {
+            var code:uint = event.charCode;
+            var line:String = "";
+            //trace( "code = " + code );
+            
+            switch( code )
+            {
+                case Keyboard.ENTER:
+                line = input.text;
+                //trace( "ENTER" );
+                //trace( "input = [" + command + "]" );
+                input.text = "";
+                _interpret( line );
+                break;
+            }
         }
         
         private function _draw():void
@@ -141,6 +168,14 @@ package
             output.wordWrap = true;
             output.defaultTextFormat = new TextFormat( "Arial", 10, 0x555555, true );
             
+            input = new TextField();
+            input.border = true;
+            input.borderColor = 0xff00ff;
+            input.type = TextFieldType.INPUT;
+            input.multiline = false;
+            input.wordWrap = false;
+            input.antiAliasType = AntiAliasType.ADVANCED;
+            input.defaultTextFormat = new TextFormat( "Arial", 10, 0x000000, true );
             
             //default
             _colorize( connectionDot, 0xcccccc );
@@ -154,6 +189,12 @@ package
             addChild( connectionDot );
             addChild( bgoutput );
             addChild( output );
+            addChild( input );
+        }
+        
+        protected function _interpret( line:String ):void
+        {
+            
         }
         
         public function main():void
@@ -167,6 +208,7 @@ package
             
             //events
             stage.addEventListener( Event.RESIZE, onResize );
+            stage.addEventListener( KeyboardEvent.KEY_DOWN, onKeyDown );
             
             //action
             onResize();
@@ -198,9 +240,15 @@ package
             undertitle.text = peerID;
         }
         
+        public function clearConsole():void
+        {
+            output.text = "";
+        }
+        
         public function writeline( message:String ):void
         {
             output.appendText( message + "\n" );
+            output.scrollV = output.numLines;
         }
         
         public function clearBackground():void

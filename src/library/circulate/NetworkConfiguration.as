@@ -38,6 +38,11 @@ package library.circulate
         public function set enableErrorChecking( value:Boolean ):void { _config.enableErrorChecking = value; }
         
         /** The default username. */
+        public function get loopback():Boolean { return _config.loopback; }
+        /** @private */
+        public function set loopback( value:Boolean ):void { _config.loopback = value; }
+        
+        /** The default username. */
         public function get username():String { return _config.username; }
         /** @private */
         public function set username( value:String ):void { _config.username = value; }
