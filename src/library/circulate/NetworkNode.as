@@ -37,6 +37,7 @@ package library.circulate
 {
     import flash.net.GroupSpecifier;
     import flash.net.NetGroup;
+    import flash.utils.Dictionary;
 
     /**
      * 
@@ -49,7 +50,16 @@ package library.circulate
         function get group():NetGroup;
         function get joined():Boolean;
         
+        function get clients():Vector.<NetworkClient>;
+        function get sent():Dictionary;
+        
+        function findClientByPeerID( peerID:String ):NetworkClient;
+        function addLocalClient():void;
+        function removeLocalClient():void;
+        
         function join( password:String = "" ):void;
         function leave():void;
+        
+        function sendToAll( command:NetworkCommand ):void;
     }
 }

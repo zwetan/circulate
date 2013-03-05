@@ -41,6 +41,7 @@ package library.circulate
     public interface NetworkCommand
     {
         function get name():String;
-        function get type():CommandType;
+        
+        function execute( network:Network, node:NetworkNode ):void;
     }
 }
