@@ -1,7 +1,10 @@
 package library.circulate
 {
     import core.dump;
-
+    
+    /**
+    * Configuration class for the library.
+    */
     public class NetworkConfiguration
     {
         private var _config:Object;
@@ -41,6 +44,16 @@ package library.circulate
         public function get loopback():Boolean { return _config.loopback; }
         /** @private */
         public function set loopback( value:Boolean ):void { _config.loopback = value; }
+        
+        /** The default username. */
+        public function get compressPacket():Boolean { return _config.compressPacket; }
+        /** @private */
+        public function set compressPacket( value:Boolean ):void { _config.compressPacket = value; }
+        
+        /** The default username. */
+        public function get wrapCommandIntoPacket():Boolean { return _config.wrapCommandIntoPacket; }
+        /** @private */
+        public function set wrapCommandIntoPacket( value:Boolean ):void { _config.wrapCommandIntoPacket = value; }
         
         /** The default username. */
         public function get username():String { return _config.username; }
