@@ -134,11 +134,11 @@ package
                 var lines:Array = line.split( " " );
                 nodename = lines.shift();
                 line = lines.join( " " );
-                netcmd = new ChatMessage( line, nodename );
+                netcmd = new ChatMessage( line, localAreaNetwork.client.peerID, nodename );
                 break;
                 
                 case "chat":
-                netcmd = new ChatMessage( line );
+                netcmd = new ChatMessage( line, localAreaNetwork.client.peerID );
                 break;
                 
                 case "clear":
@@ -162,6 +162,9 @@ package
         {
             super.main();
             
+            afterCircleRelease = sendCustomCommand;
+            TestCustomCommand.reference = circle;
+            
             /* You have 2 ways to create your config
                
                either you directly pass into the ctor your own literal object
@@ -179,6 +182,7 @@ package
             //override
             config.username = "test" + _randomRange( 0, 1000 );
             //config.connectionTimeout = 5 * 1000;
+            config.loopback = false;
             
             //configure
             //config.serverKey = "503a63139c4a687fc822004e-7d1c016995c5";
@@ -208,8 +212,10 @@ package
             clearBackground();
             
             var i:uint;
+            var j:uint;
             var node:NetworkNode;
             var client:NetworkClient;
+            var post:String = "";
             
             writelineToBackground( "nodes:" );
             writelineToBackground( "------" );
@@ -217,18 +223,20 @@ package
             {
                 node = localAreaNetwork.nodes[i];
                 writelineToBackground( node.name );
+                for( j=0; j<node.clients.length; j++ )
+                {
+                    client = node.clients[ j ];
+                    if( client == localAreaNetwork.client )
+                    {
+                        post = "(me) ";
+                    }
+                    
+                    writelineToBackground( post + "["+j+"]: " + client.username );
+                }
             }
             
             writelineToBackground( "" );
             
-            writelineToBackground( "clients:" );
-            writelineToBackground( "--------" );
-            writelineToBackground( "[*]: " + localAreaNetwork.client.username );
-            for( i=0; i<localAreaNetwork.clients.length; i++ )
-            {
-                client = localAreaNetwork.clients[i];
-                writelineToBackground( "["+i+"]: " + client.username );
-            }
         }
         
         
@@ -249,6 +257,12 @@ package
             trace( "test disconnected" );
             updateConnection( 0xff0000 );
             removeEventListener( Event.ENTER_FRAME, onLoop );
+        }
+        
+        public function sendCustomCommand():void
+        {
+            var custom:TestCustomCommand = new TestCustomCommand( circle.x, circle.y );
+            localAreaNetwork.sendCommandToNode( custom );
         }
         
     }
