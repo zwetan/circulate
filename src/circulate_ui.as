@@ -6,6 +6,7 @@ package
     import flash.display.StageScaleMode;
     import flash.events.Event;
     import flash.events.KeyboardEvent;
+    import flash.events.MouseEvent;
     import flash.events.UncaughtErrorEvent;
     import flash.geom.ColorTransform;
     import flash.text.AntiAliasType;
@@ -28,6 +29,8 @@ package
         public var bgoutput:TextField;
         public var output:TextField;
         public var input:TextField;
+        
+        public var circle:Sprite;
         
         public function circulate_ui()
         {
@@ -177,10 +180,18 @@ package
             input.antiAliasType = AntiAliasType.ADVANCED;
             input.defaultTextFormat = new TextFormat( "Arial", 10, 0x000000, true );
             
+            circle = new Sprite();
+            circle.graphics.clear();
+            circle.graphics.beginFill( 0x000000, 0.5 );
+            circle.graphics.drawCircle( 0, 0, 20 );
+            circle.graphics.endFill();
+            
             //default
             _colorize( connectionDot, 0xcccccc );
             title.text = "unknown";
             undertitle.text = "000000";
+            circle.x = stage.stageWidth/2;
+            circle.y = stage.stageHeight/2;
             
             //UI stack
             addChild( topbar );
@@ -190,7 +201,26 @@ package
             addChild( bgoutput );
             addChild( output );
             addChild( input );
+            
+            addChild( circle );
         }
+        
+        private function onClickCircle( event:MouseEvent ):void
+        {
+            circle.startDrag( true );
+        }
+        
+        private function onReleaseCircle( event:MouseEvent ):void
+        {
+            circle.stopDrag();
+            
+            if( afterCircleRelease != null )
+            {
+                afterCircleRelease();
+            }
+        }
+        
+        public var afterCircleRelease:Function;
         
         protected function _interpret( line:String ):void
         {
@@ -209,6 +239,8 @@ package
             //events
             stage.addEventListener( Event.RESIZE, onResize );
             stage.addEventListener( KeyboardEvent.KEY_DOWN, onKeyDown );
+            circle.addEventListener( MouseEvent.MOUSE_DOWN, onClickCircle );
+            circle.addEventListener( MouseEvent.MOUSE_UP, onReleaseCircle );
             
             //action
             onResize();
