@@ -47,6 +47,8 @@ package library.circulate
     import flash.net.GroupSpecifier;
     import flash.net.NetConnection;
     import flash.net.NetGroup;
+    import flash.net.NetGroupReceiveMode;
+    import flash.net.NetGroupSendMode;
     import flash.net.ObjectEncoding;
     import flash.utils.ByteArray;
     import flash.utils.Dictionary;
@@ -103,10 +105,10 @@ package library.circulate
         {
             var groupspec:GroupSpecifier = new GroupSpecifier( name );
                 groupspec.ipMulticastMemberUpdatesEnabled = true;
-                groupspec.objectReplicationEnabled        = true;
+//                groupspec.objectReplicationEnabled        = true;
                 groupspec.multicastEnabled                = true;
-                groupspec.postingEnabled                  = true;
-                groupspec.routingEnabled                  = true;
+//                groupspec.postingEnabled                  = true;
+//                groupspec.routingEnabled                  = true;
                 groupspec.addIPMulticastAddress( multicast );
             
             return groupspec;
@@ -351,6 +353,8 @@ package library.circulate
             
             if( node )
             {
+                netgroup.receiveMode = NetGroupReceiveMode.NEAREST;
+                
                 //we add the local client to the list of clients
                 node.addLocalClient();
                 
@@ -358,17 +362,17 @@ package library.circulate
                 {
                     _log( "you are alone in node " + node.name );
                     
-                    if( node != _commandCenter )
-                    {
-                        var username:String = client.username;
-                        var peerID:String   = client.peerID;
-                        var date:Date = new Date();
-                        var str:String = "<{user}> joined [{node}] @ {date}";
-                        var msg:String = format( str, {user:username,node:node.name,date:date.toString()} );
-                        
-                        var syscmd:NetworkCommand = new SystemMessage( msg, peerID );
-                        sendCommandToNode( syscmd, _commandCenter );
-                    }
+//                    if( node != _commandCenter )
+//                    {
+//                        var username:String = client.username;
+//                        var peerID:String   = client.peerID;
+//                        var date:Date = new Date();
+//                        var str:String = "<{user}> joined [{node}] @ {date}";
+//                        var msg:String = format( str, {user:username,node:node.name,date:date.toString()} );
+//                        
+//                        var syscmd:NetworkCommand = new SystemMessage( msg, peerID );
+//                        sendCommandToNode( syscmd, _commandCenter );
+//                    }
                 }
                 
             }
@@ -377,7 +381,7 @@ package library.circulate
         
         private function onNodeDisconnect( netgroup:NetGroup, message:String = "" ):void
         {
-            _log( "network.onNodeDisconnect()" );
+//            _log( "network.onNodeDisconnect()" );
             
             var node:NetworkNode = _findNodeByGroup( netgroup );
             
@@ -672,7 +676,7 @@ package library.circulate
         */
         public function createNode( name:String, type:NodeType = null ):void
         {
-            _log( ">>> creating Node \""+ name +"\"");
+//            _log( ">>> creating Node \""+ name +"\"");
             if( !connected )
             {
                 _info( "you need to connect first before joining a node." );
@@ -694,20 +698,20 @@ package library.circulate
                     case NodeType.command:
                     if( !_commandCenter )
                     {
-                        trace( "CREATE NodeType.command" );
+//                        trace( "CREATE NodeType.command" );
                         node = new CommandCenter( this, name );
                         _commandCenter = node as CommandCenter;
                     }
                     else
                     {
-                        trace( "CommandCenter already exists, we can only have one" );
+//                        trace( "CommandCenter already exists, we can only have one" );
                         joinNode( _commandCenter.name );
                         return;
                     }
                     break;
                     
                     case NodeType.chat:
-                    trace( "CREATE NodeType.chat" );
+//                    trace( "CREATE NodeType.chat" );
                     node = new ChatNode( this, name );
                     break;
                     
@@ -799,12 +803,15 @@ package library.circulate
             
             if( node )
             {
-                node.sendToAll( command );
+                //node.sendToAll( command );
+                node.sendToAllNeighbors( command );
             }
             else if( _commandCenter )
             {
                 //if no Node, we use by default the CommandCenter node
-                _commandCenter.sendToAll( command );
+                //_commandCenter.sendToAll( command );
+                _commandCenter.sendToAllNeighbors( command );
+                //_commandCenter.sendToNeighbor( command, NetGroupSendMode.NEXT_INCREASING );
             }
             else
             {

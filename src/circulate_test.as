@@ -182,7 +182,7 @@ package
             //override
             config.username = "test" + _randomRange( 0, 1000 );
             //config.connectionTimeout = 5 * 1000;
-            config.loopback = false;
+            //config.loopback = false;
             
             //configure
             //config.serverKey = "503a63139c4a687fc822004e-7d1c016995c5";
@@ -216,19 +216,27 @@ package
             var node:NetworkNode;
             var client:NetworkClient;
             var post:String = "";
+            var elect:String = "(elected) ";
             
             writelineToBackground( "nodes:" );
             writelineToBackground( "------" );
             for( i=0; i<localAreaNetwork.nodes.length; i++ )
             {
                 node = localAreaNetwork.nodes[i];
-                writelineToBackground( node.name );
+                writelineToBackground( (node.isElected ? elect: "") + node.name );
+                writelineToBackground( node.group.neighborCount  + " :neighbours _| " );
+                writelineToBackground( node.estimatedMemberCount + "    :members _| " );
+                writelineToBackground( node.clients.length       + "    :clients _| " );
                 for( j=0; j<node.clients.length; j++ )
                 {
                     client = node.clients[ j ];
                     if( client == localAreaNetwork.client )
                     {
                         post = "(me) ";
+                    }
+                    else
+                    {
+                        post = "";
                     }
                     
                     writelineToBackground( post + "["+j+"]: " + client.username );
@@ -261,7 +269,8 @@ package
         
         public function sendCustomCommand():void
         {
-            var custom:TestCustomCommand = new TestCustomCommand( circle.x, circle.y );
+            var localPeerID:String = localAreaNetwork.client.peerID;
+            var custom:TestCustomCommand = new TestCustomCommand( localPeerID, circle.x, circle.y );
             localAreaNetwork.sendCommandToNode( custom );
         }
         

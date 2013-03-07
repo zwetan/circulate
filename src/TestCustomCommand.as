@@ -6,6 +6,7 @@ package
     import flash.net.registerClassAlias;
     
     import library.circulate.Network;
+    import library.circulate.NetworkClient;
     import library.circulate.NetworkCommand;
     import library.circulate.NetworkNode;
     
@@ -27,6 +28,8 @@ package
        
        Things to know:
        - you can not pass a display object reference
+       - if you need to know who send you the command
+         you have to declare a peerID as part of the command
     */
     registerClassAlias( "TestCustomCommand", TestCustomCommand );
     
@@ -35,13 +38,15 @@ package
         //to hold our ref but we don't serialize/deserialize it
         static public var reference:DisplayObject;
         
+        public var peerID:String;
         public var x:Number;
         public var y:Number;
         
-        public function TestCustomCommand( x:Number = 0, y:Number = 0 )
+        public function TestCustomCommand( peerID:String = "", x:Number = 0, y:Number = 0 )
         {
-            this.x = x;
-            this.y = y;
+            this.peerID = peerID;
+            this.x      = x;
+            this.y      = y;
         }
         
         public function get name():String { return getClassName( this ); }
@@ -50,14 +55,17 @@ package
         {
             var _log:Function = network.writer;
                 _log( "command [" + name + "]" );
+                _log( "  |_ peerID: " + peerID );
                 _log( "  |_ x: " + x );
                 _log( "  |_ y: " + y );
+            
+            var client:NetworkClient = node.findClientByPeerID( peerID );
             
             if( reference )
             {
                 reference.x = x;
                 reference.y = y;
-                _log( "moved object to x=" + x + ", y=" + y );
+                _log( "<" + client.username + "> moved object to x=" + x + ", y=" + y );
             }
         }
     }
