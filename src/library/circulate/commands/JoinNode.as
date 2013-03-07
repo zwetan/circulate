@@ -32,10 +32,10 @@ package library.circulate.commands
         public function execute( network:Network, node:NetworkNode ):void
         {
             var _log:Function = network.writer;
-                _log( "command [" + name + "]" );
-                _log( "  |_ username: " + username );
-                _log( "  |_ peerID: " + peerID );
-                _log( "  |_ timestamp: " + timestamp );
+//                _log( "command [" + name + "]" );
+//                _log( "  |_ username: " + username );
+//                _log( "  |_ peerID: " + peerID );
+//                _log( "  |_ timestamp: " + timestamp );
             
             var client:NetworkClient = node.findClientByPeerID( peerID );
             var date:Date = new Date( timestamp );
@@ -45,14 +45,22 @@ package library.circulate.commands
                 client.username = username;
             }
             
-            var str:String = "<{user}> joined [{node}] @ {date}";
-            var msg:String = format( str, {user:username,node:node.name,date:date.toString()} );
-            _log( msg );
+            _log( ">>>>> found client <" + username +"> in [" + node.name + "]" );
             
-            var syscmd:NetworkCommand = new SystemMessage( msg, peerID );
-            network.sendCommandToNode( syscmd, network.commandCenter );
-            
-            //syscmd.execute( network, network.commandCenter );
+//            var str:String = "<{user}> (you) arrived in [{node}] @ {date}";
+//            var sysstr:String = "<{user}> joined [{node}] @ {date}";
+//            
+//            if( network.client != client )
+//            {
+//                str = sysstr;
+//            }
+//            
+//            var msg:String = format( str, {user:username,node:node.name,date:date.toString()} );
+//            var sysmsg:String = format( sysstr, {user:username,node:node.name,date:date.toString()} );
+//            _log( msg );
+//            
+//            var syscmd:NetworkCommand = new SystemMessage( sysmsg, peerID );
+//            network.sendCommandToNode( syscmd, network.commandCenter );
             
         }
     }

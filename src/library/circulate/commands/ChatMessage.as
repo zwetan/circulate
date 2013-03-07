@@ -36,24 +36,40 @@ package library.circulate.commands
         public function execute( network:Network, node:NetworkNode ):void
         {
             var _log:Function = network.writer;
-                _log( "command [" + name + "]" );
-                _log( "  |_ message: " + message );
-                _log( "  |_ peerID: " + peerID );
-                _log( "  |_ nodename: " + nodename );
-                _log( "  |_ id: " + id );
+//                _log( "command [" + name + "]" );
+//                _log( "  |_ message: " + message );
+//                _log( "  |_ peerID: " + peerID );
+//                _log( "  |_ nodename: " + nodename );
+//                _log( "  |_ id: " + id );
+            
+//            if( message == "" )
+//            {
+//                _log( "message is empty, we ignore it" );
+//                if( (id != "") && (node.sent[id])  )
+//                {
+//                    //testing for id allow us to display the message only to the sender
+//                    _log( "your last message may have not arrived to destination" );
+//                }
+//                return;
+//            }
+            
+            var client:NetworkClient;
             
             if( message == "" )
             {
-                _log( "message is empty, we ignore it" );
-                if( (id != "") && (node.sent[id])  )
+                if( peerID != "" )
                 {
-                    //testing for id allow us to display the message only to the sender
-                    _log( "your last message may have not arrived to destination" );
+                    client = node.findClientByPeerID( peerID );
+                    if( client == network.client )
+                    {
+                        _log( "your last message may have not arrived to destination" );
+                    }
                 }
+                
                 return;
             }
             
-            var client:NetworkClient = node.findClientByPeerID( peerID );
+            client = node.findClientByPeerID( peerID );
             var username:String = "unknown";
             
             if( client && (client.username != "") )
@@ -67,7 +83,7 @@ package library.circulate.commands
             }
             
             
-            var str:String = "[={node}] <{user}> says \"{message}\".";
+            var str:String = ">>>>> [={node}] <{user}> says \"{message}\".";
             var msg:String = format( str, {node:nodename,user:username,message:message} );
             _log( msg );
         }

@@ -27,9 +27,9 @@ package library.circulate.commands
         public function execute( network:Network, node:NetworkNode ):void
         {
             var _log:Function = network.writer;
-                _log( "command [" + name + "]" );
-                _log( "  |_ message: " + message );
-                _log( "  |_ peerID: " + peerID );
+//                _log( "command [" + name + "]" );
+//                _log( "  |_ message: " + message );
+//                _log( "  |_ peerID: " + peerID );
             
             var client:NetworkClient = node.findClientByPeerID( peerID );
             
