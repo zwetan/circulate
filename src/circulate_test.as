@@ -50,6 +50,7 @@ package
     import library.circulate.NetworkNode;
     import library.circulate.NetworkType;
     import library.circulate.commands.ChatMessage;
+    import library.circulate.commands.RequestInformation;
     import library.circulate.events.NetworkEvent;
     import library.circulate.utils.getLocalUserName;
     import library.circulate.utils.traceNetworkInterfaces;
@@ -120,6 +121,16 @@ package
             
             switch( command )
             {
+                case "start":
+                localAreaNetwork.connect();
+                sendcmd = false;
+                break;
+                
+                case "stop":
+                localAreaNetwork.disconnect();
+                sendcmd = false;
+                break;
+                
                 case "test":
                 writeline( "## user [" + username + "] is testing \"" + line + "\"" );
                 sendcmd = false;
@@ -207,9 +218,19 @@ package
 //            var dolater0:uint = setTimeout( function():void { localAreaNetwork.connect(); }, (sec*1000) );
         }
         
-        private function onLoop( event:Event ):void
+        private var _loopcount:uint = 0;
+        private var _loopmax:uint   = 10;
+        
+        private function onLoop( event:Event = null ):void
         {
             clearBackground();
+            
+            if( _loopcount >= _loopmax )
+            {
+                _loopcount = 0;
+            }
+            
+            _loopcount++;
             
             var i:uint;
             var j:uint;
@@ -240,6 +261,13 @@ package
                     }
                     
                     writelineToBackground( post + "["+j+"]: " + client.username );
+                    
+                    if( (client.username == "") && (_loopcount == _loopmax) )
+                    {
+                        var request:NetworkCommand = new RequestInformation( localAreaNetwork.client.peerID );
+                        node.sendTo( client.peerID, request );
+                    }
+                    
                 }
             }
             
@@ -265,6 +293,7 @@ package
             trace( "test disconnected" );
             updateConnection( 0xff0000 );
             removeEventListener( Event.ENTER_FRAME, onLoop );
+            clearBackground();
         }
         
         public function sendCustomCommand():void
