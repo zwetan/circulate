@@ -50,6 +50,7 @@ package library.circulate
         function get group():NetGroup;
         function get joined():Boolean;
         function get isElected():Boolean;
+        function get isFullMesh():Boolean;
         
         function get clients():Vector.<NetworkClient>;
         function get estimatedMemberCount():uint;
@@ -61,12 +62,13 @@ package library.circulate
         function join( password:String = "" ):void;
         function leave():void;
         
-        function post( command:NetworkCommand ):String;
-        function sendToAllNeighbors( command:NetworkCommand ):String;
-        function sendToNearest( command:NetworkCommand, groupAddress:String ):String;
-        function sendToNeighbor( command:NetworkCommand, sendMode:String ):String;
+//        function post( command:NetworkCommand ):String;
+//        function sendToAllNeighbors( command:NetworkCommand ):String;
+//        function sendToNearest( command:NetworkCommand, groupAddress:String ):String;
+//        function sendToNeighbor( command:NetworkCommand, sendMode:String ):String;
         
         function sendToAll( command:NetworkCommand ):void;
-        function sendTo( address:String, command:NetworkCommand ):void;
+        function sendTo( peerID:String, command:NetworkCommand ):void;
+        function sendToUser( name:String, command:NetworkCommand ):void;
     }
 }
