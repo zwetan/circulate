@@ -1,6 +1,7 @@
 package library.circulate.nodes
 {
     import core.strings.format;
+    import core.strings.startsWith;
     
     import flash.events.NetStatusEvent;
     import flash.net.GroupSpecifier;
@@ -9,6 +10,8 @@ package library.circulate.nodes
     import flash.net.NetGroupSendMode;
     import flash.net.NetGroupSendResult;
     import flash.utils.Dictionary;
+    
+    import flashx.textLayout.events.UpdateCompleteEvent;
     
     import library.circulate.AutomaticDistributedElection;
     import library.circulate.Network;
@@ -34,8 +37,8 @@ package library.circulate.nodes
         
         protected var _type:NodeType     = null;
         protected var _name:String       = "";
-        protected var _joined:Boolean    = false;
-        protected var _isElected:Boolean = false;
+        protected var _joined:Boolean;
+        protected var _isElected:Boolean;
         
         protected var _network:Network;
         protected var _group:NetGroup;
@@ -54,9 +57,18 @@ package library.circulate.nodes
             _name      = name;
             _specifier = specifier;
             
-            _clients   = new Vector.<NetworkClient>();
+            _reset();
             
             _log( "Node.ctor( \"" + name + "\" )" );
+        }
+        
+        private function _reset():void
+        {
+            _log( "Node._reset()" );
+            
+            _joined    = false;
+            _isElected = false;
+            _clients   = new Vector.<NetworkClient>();
         }
         
         //--- events ---
@@ -110,6 +122,7 @@ package library.circulate.nodes
                    if info.fromLocal is FALSE.
                 */
                 case "NetGroup.SendTo.Notify": // event.info.message, event.info.from, event.info.fromLocal
+                _log( "NetGroup.SendTo.Notify( " + event.info.from + ", " + event.info.message + ", " + event.info.fromLocal + " )" );
                 onSendToNotify( event.info.from, event.info.message, event.info.fromLocal );
                 break;
                 
@@ -132,26 +145,11 @@ package library.circulate.nodes
         {
             _log( "Node.onNeighborConnect( " + peerID + ", " + address + " )" );
             
+            setReceiveMode();
+            
             _addNeighbour( peerID );
             
-            var now:Date = new Date();
-            var timestamp:uint = now.valueOf();
-            var client:NetworkClient = _network.client;
-            var cmd:NetworkCommand = new JoinNode( client.username, client.peerID, timestamp );
-            
-            //sendToNearest( cmd, address );
-            //sendToAllNeighbors( cmd );
-            //sendToNeighbor( cmd, NetGroupSendMode.NEXT_INCREASING );
-            
-            if( estimatedMemberCount <= FULLMESH )
-            {
-                sendToAllNeighbors( cmd );
-            }
-            else if( estimatedMemberCount > FULLMESH )
-            {
-                sendToNeighbor( cmd, NetGroupSendMode.NEXT_INCREASING );
-            }
-            
+            onNeighborConnectAction( peerID, address );
         }
         
         private function onNeighborDisconnect( peerID:String, address:String ):void
@@ -160,9 +158,10 @@ package library.circulate.nodes
             
             var client:NetworkClient = _findClientByPeerID( peerID );
             var index:uint = _findClientIndex( client );
+            var username:String = client.username;
             
             _removeClient( index );
-            
+            onNeighborDisconnectAction( peerID, address, username );
         }
         
         private function onLocalCoverageNotify():void
@@ -216,10 +215,21 @@ package library.circulate.nodes
                    is always resolvedto "null" (strange, bug?)
                 */
                 _log( "cmd is null" );
+                var groupAddress:String = _group.convertPeerIDToGroupAddress( _network.client.peerID );
+                sendToNearest( cmd, groupAddress );
             }
             
         }
         
+        /* note:
+           
+           address - event.info.from      - is the groupAddress from which the message was received.
+           message - event.info.message   - is the message.
+           isLocal - event.info.fromLocal - is TRUE if the message was sent by this node
+           
+           To implement recursive routing, the message must be resent with NetGroup.sendToNearest()
+           if info.fromLocal is FALSE.
+        */
         private function onSendToNotify( address:String, message:Object, isLocal:Boolean = false ):void
         {
             _log( "Node.onSendToNotify( " + address + ", " + message + ", " + isLocal + " )" );
@@ -240,22 +250,33 @@ package library.circulate.nodes
             
             if( cmd )
             {
+                
                 if( isLocal )
                 {
-                    _log( "LOCAL" );
-                    return;
+                    _log( "command roundtriped back to you" );
+//                    if( _network.config.loopback )
+//                    {
+//                        cmd.execute( _network, this );
+//                    }
+                }
+                else
+                {
+                    cmd.execute( _network, this );
+                    
+                    //sendToNearest( cmd, address, true );
+                    //sendToNeighbor( cmd, NetGroupSendMode.NEXT_INCREASING );
                 }
                 
-                cmd.execute( _network, this );
+                //sendToNeighbor( cmd, NetGroupSendMode.NEXT_INCREASING );
                 //sendToNeighbor( cmd, NetGroupSendMode.NEXT_DECREASING );
                 //sendToNearest( cmd, address );
             }
             else
             {
                 _log( "cmd is null" );
-                var empty:NetworkCommand = new ChatMessage( "", address, "", "" );
-                //sendToAll( empty );
-                sendToAllNeighbors( empty );
+//                var empty:NetworkCommand = new ChatMessage( "", address, "", "" );
+//                //sendToAll( empty );
+//                sendToAllNeighbors( empty );
             }
             
         }
@@ -266,7 +287,11 @@ package library.circulate.nodes
         private function _log( message:String ):void
         {
             var log:Function = _network.writer;
-            log( message );
+            
+            if( startsWith( message, ">" ) )
+            {
+                log( message );
+            }
         }
         
         private function _addClient( client:NetworkClient ):void
@@ -294,6 +319,19 @@ package library.circulate.nodes
             _clients.splice( index, 1 );
         }
         
+        private function _removeAllClient():void
+        {
+            _log( "Node._removeAllClient()" );
+            
+            var i:uint;
+            var c:NetworkClient;
+            
+            for( i=0; i<_clients.length; i++ )
+            {
+                _removeClient( i );
+            }
+        }
+        
         private function _findClientByPeerID( peerID:String ):NetworkClient
         {
             _log( "Node._findClientByPeerID( " + peerID + " )" );
@@ -306,6 +344,26 @@ package library.circulate.nodes
                 client = _clients[i];
                 
                 if( client.peerID == peerID )
+                {
+                    return client;
+                }
+            }
+            
+            return null;
+        }
+        
+        private function _findClientByName( username:String ):NetworkClient
+        {
+            _log( "Node._findClientByName( " + username + " )" );
+            
+            var i:uint;
+            var client:NetworkClient;
+            
+            for( i=0; i<_clients.length; i++ )
+            {
+                client = _clients[i];
+                
+                if( client.username == username )
                 {
                     return client;
                 }
@@ -366,6 +424,176 @@ package library.circulate.nodes
             _addClient( client );
         }
         
+        //--- protected ---
+        
+        /* Those methods are meant to be overrided to customize
+           the behaviour ofthe NetworkNode
+        */
+        
+        protected function setReceiveMode():void
+        {
+            _log( "Node.setReceiveMode()" );
+            _group.receiveMode = NetGroupReceiveMode.EXACT;
+        }
+        
+        protected function onNeighborConnectAction( peerID:String, address:String ):void
+        {
+            _log( "Node.onNeighborConnectAction( " + peerID + ", " + address + " )" );
+        }
+        
+        protected function onNeighborDisconnectAction( peerID:String, address:String, username:String ):void
+        {
+            _log( "Node.onNeighborDisconnectAction( " + peerID + ", " + address + ", " + username + " )" );
+        }
+        
+        /* note:
+           Sends a message to all members of a group.
+        */
+        protected function post( command:NetworkCommand ):String
+        {
+            _log( "Node.post( " + command + " )" );
+            
+            if( !_specifier.postingEnabled )
+            {
+                _log( "## ERROR : posting is not enabled ##" );
+                return null;
+            }
+            
+            /* note:
+               return the messageID of the message if posted, or null on error.
+               The messageID is the hexadecmial of the SHA256 of the raw bytes of the serialization of the message.
+            */
+            var messageID:String;
+            
+            if( _network.config.wrapCommandIntoPacket )
+            {
+                var packet:Packet = Network.serialize( command, _network.config.compressPacket );
+                messageID = _group.post( packet );
+            }
+            else
+            {
+                messageID = _group.post( command );
+            }
+            
+            return messageID;
+        }
+        
+        /* note:
+           Sends a message to all neighbors.
+        */
+        protected function sendToAllNeighbors( command:NetworkCommand ):String
+        {
+            _log( "Node.sendToAllNeighbors( " + command + " )" );
+            
+            if( !_specifier.routingEnabled )
+            {
+                _log( "## ERROR : routing is not enabled ##" );
+                return NetGroupSendResult.ERROR;
+            }
+            
+            var result:String;
+            
+            if( _network.config.wrapCommandIntoPacket )
+            {
+                var packet:Packet = Network.serialize( command, _network.config.compressPacket );
+                result = _group.sendToAllNeighbors( packet );
+            }
+            else
+            {
+                result = _group.sendToAllNeighbors( command );
+            }
+            
+            return result;
+        }
+        
+        /* note:
+           Sends a message to the neighbor (or local node) nearest
+           to the specified group address.
+        */
+        protected function sendToNearest( command:NetworkCommand, groupAddress:String ):String
+        {
+            _log( "Node.sendToNearest( " + command + ", " + groupAddress + " )" );
+            
+            if( !_specifier.routingEnabled )
+            {
+                _log( "## ERROR : routing is not enabled ##" );
+                return NetGroupSendResult.ERROR;
+            }
+            
+            var result:String;
+            
+            if( _network.config.wrapCommandIntoPacket )
+            {
+                var packet:Packet = Network.serialize( command, _network.config.compressPacket );
+                result = _group.sendToNearest( packet, groupAddress );
+            }
+            else
+            {
+                result = _group.sendToNearest( command, groupAddress );
+            }
+            
+            return result;
+        }
+        
+        /* note:
+           Sends a message to the neighbor specified by the sendMode parameter.
+        */
+        protected function sendToNeighbor( command:NetworkCommand, sendMode:String ):String
+        {
+            _log( "Node.sendToNeighbor( " + command + ", " + sendMode + " )" );
+            
+            if( !_specifier.routingEnabled )
+            {
+                _log( "## ERROR : routing is not enabled ##" );
+                return NetGroupSendResult.ERROR;
+            }
+            
+            var result:String;
+            
+            if( _network.config.wrapCommandIntoPacket )
+            {
+                var packet:Packet = Network.serialize( command, _network.config.compressPacket );
+                result = _group.sendToNeighbor( packet, sendMode );
+            }
+            else
+            {
+                result = _group.sendToNeighbor( command, sendMode );
+            }
+            
+            return result;
+        }
+        
+        protected function onMessageRouted( result:String ):void
+        {
+            switch( result )
+            {
+                case NetGroupSendResult.SENT:
+                _log( "message successfully routed" );
+                break;
+                
+                case NetGroupSendResult.NO_ROUTE:
+                _log( "## WARNING : message could notfind a route ##" );
+                break;
+                
+                case NetGroupSendResult.ERROR:
+                _log( "## ERROR : message not routed ##" );
+                break;
+            }
+        }
+        
+        protected function onMessagePosted( messageID:String ):void
+        {
+           if( messageID )
+            {
+                _log( "message " + messageID + "  successfully routed" );
+            }
+            else
+            {
+                _log( "## ERROR : message not posted ##" );
+            }
+        }
+        
+        
         //--- public ---
         
         public function get type():NodeType { return _type; }
@@ -374,6 +602,16 @@ package library.circulate.nodes
         public function get group():NetGroup { return _group; }
         public function get joined():Boolean { return _joined; }
         public function get isElected():Boolean { return _isElected; }
+        
+        public function get isFullMesh():Boolean
+        {
+            if( _group )
+            {
+                return estimatedMemberCount <= FULLMESH;
+            }
+            
+            return false;
+        }
         
         public function get clients():Vector.<NetworkClient> { return _clients; }
         
@@ -430,120 +668,61 @@ package library.circulate.nodes
                 return;
             }
             
-            _group.close();
-            _group.removeEventListener( NetStatusEvent.NET_STATUS, onNetStatus );
-            _group = null;
+            if( _group )
+            {
+                _group.close();
+                _group.removeEventListener( NetStatusEvent.NET_STATUS, onNetStatus );
+                _group = null;
+            }
+            
+            _removeAllClient();
+            _reset();
         }
         
         public function sendToAll( command:NetworkCommand ):void
         {
-            
-        }
-        
-        public function sendTo( address:String, command:NetworkCommand ):void
-        {
-            
-        }
-        
-        /* note:
-           Sends a message to all members of a group.
-        */
-        public function post( command:NetworkCommand ):String
-        {
-            if( !_specifier.postingEnabled )
+            if( !_specifier.postingEnabled && !_specifier.routingEnabled )
             {
-                _log( "## ERROR : posting is not enabled ##" );
-                return null;
+                trace( "this group can not send message to all" );
+                return;
             }
             
-            /* note:
-               return the messageID of the message if posted, or null on error.
-               The messageID is the hexadecmial of the SHA256 of the raw bytes of the serialization of the message.
-            */
-            var messageID:String;
-            
-            if( _network.config.wrapCommandIntoPacket )
+            if( isFullMesh )
             {
-                var packet:Packet = Network.serialize( command, _network.config.compressPacket );
-                messageID = _group.post( packet );
+                var result:String = sendToAllNeighbors( command );
+                onMessageRouted( result );
             }
             else
             {
-                messageID = _group.post( command );
+                var messageID:String = post( command );
+                onMessagePosted( messageID );
             }
             
-            if( messageID )
+            if( _network.config.loopback )
             {
-                //message posted
-                return messageID;
+                command.execute( _network, this );
             }
-            else
-            {
-                //message not posted
-                _log( "## ERROR : message not posted ##" );
-                return null;
-            }
+            
         }
         
-        /* note:
-           Sends a message to all neighbors.
-        */
-        public function sendToAllNeighbors( command:NetworkCommand ):String
+        public function sendTo( peerID:String, command:NetworkCommand ):void
         {
-            var result:String;
-            
-            if( _network.config.wrapCommandIntoPacket )
-            {
-                var packet:Packet = Network.serialize( command, _network.config.compressPacket );
-                result = _group.sendToAllNeighbors( packet );
-            }
-            else
-            {
-                result = _group.sendToAllNeighbors( command );
-            }
-            
-            return result;
+            var groupAddress:String = _group.convertPeerIDToGroupAddress( peerID );
+            sendToNearest( command, groupAddress );
         }
         
-        /* note:
-           Sends a message to the neighbor (or local node) nearest
-           to the specified group address.
-        */
-        public function sendToNearest( command:NetworkCommand, groupAddress:String ):String
+        public function sendToUser( name:String, command:NetworkCommand ):void
         {
-            var result:String;
+            var client:NetworkClient = _findClientByName( name );
             
-            if( _network.config.wrapCommandIntoPacket )
+            if( client )
             {
-                var packet:Packet = Network.serialize( command, _network.config.compressPacket );
-                result = _group.sendToNearest( packet, groupAddress );
+                sendTo( client.peerID, command );
             }
             else
             {
-                result = _group.sendToNearest( command, groupAddress );
+                trace( "username \"" + name + "\" did not resolve to a known client" );
             }
-            
-            return result;
-        }
-        
-        /* note:
-           Sends a message to the neighbor specified by the sendMode parameter.
-        */
-        public function sendToNeighbor( command:NetworkCommand, sendMode:String ):String
-        {
-            var result:String;
-            
-            if( _network.config.wrapCommandIntoPacket )
-            {
-                var packet:Packet = Network.serialize( command, _network.config.compressPacket );
-                result = _group.sendToNeighbor( packet, sendMode );
-            }
-            else
-            {
-                result = _group.sendToNeighbor( command, sendMode );
-            }
-            
-            return result;
         }
         
         public function addLocalClient():void { _log( "Node.addLocalClient()" ); _addLocalClient(); }
