@@ -168,7 +168,6 @@ package library.circulate
         private var _local:Client;
         
         private var _nodes:Vector.<NetworkNode>;
-        private var _clients:Vector.<NetworkClient>;
         
         private var _timer:Timer;
         
@@ -182,15 +181,23 @@ package library.circulate
             _type                = type;
             _config              = config;
             _enableErrorChecking = _config.enableErrorChecking;
-            _afterAnalysis       = false;
-            
-            _nodes               = new Vector.<NetworkNode>();
-            _clients             = new Vector.<NetworkClient>();
             
             _local               = new Client( _config.username );
             _timer               = new Timer( _config.connectionTimeout );
             
             writer               = trace;
+            
+            _reset();
+            
+            _log( "Network.ctor( \"" + type + "\" )" );
+        }
+        
+        private function _reset():void
+        {
+            _log( "Network._reset()" );
+            
+            _afterAnalysis = false;
+            _nodes         = new Vector.<NetworkNode>();
         }
         
         
@@ -202,7 +209,8 @@ package library.circulate
             var reason:String = "";
             
             //trace( dump( event, true ) );
-            _log( "network netstatus code: " + event.info.code );
+            //_log( "network netstatus code: " + event.info.code );
+            _log( "Network.onNetStatus( " + event.info.code + " )" );
             
             switch( code )
             {
@@ -295,6 +303,8 @@ package library.circulate
         
         private function onTimeout( event:TimerEvent ):void
         {
+            _log( "Network.onTimeout()" );
+            
             _timer.removeEventListener( TimerEvent.TIMER_COMPLETE, onTimeout );
             
             _info( "Connection timed out after " + _config.connectionTimeout + "ms" );
@@ -306,7 +316,7 @@ package library.circulate
         
         private function onConnect( motd:String = "" ):void
         {
-            _info( "connected" );
+            _log( "Network.onConnect( " + motd + " )" );
             
             if( (motd != "") && (motd != null) )
             {
@@ -328,32 +338,40 @@ package library.circulate
          
         private function onDisconnect( message:String = "" ):void
         {
-            _info( "disconnected - " + message );
+            _log( "Network.onDisconnect( " + message + " )" );
+            
+            _destroyCommandCenter();
+            _leaveAlldNode();
+            _reset();
+            
             dispatchEvent( new NetworkEvent( NetworkEvent.DISCONNECTED ) );
         }
         
         private function onConnectivityCheckResults( info:Object ):void
         {
-            _info( "received connectivity results" );
+            _log( "Network.onConnectivityCheckResults( " + info + " )" );
+            
             traceConnectivityResults( info, _info );
             _afterAnalysis = true;
         }
         
         private function onNetworkChange():void
         {
+            _log( "Network.onNetworkChange()" );
+            
             traceNetworkInterfaces( _info );
             
         }
         
         private function onNodeConnect( netgroup:NetGroup ):void
         {
-            _log( "network.onNodeConnect()" );
+            _log( "Network.onNodeConnect( " + netgroup + " )" );
             
             var node:NetworkNode = _findNodeByGroup( netgroup );
             
             if( node )
             {
-                netgroup.receiveMode = NetGroupReceiveMode.NEAREST;
+                //netgroup.receiveMode = NetGroupReceiveMode.NEAREST;
                 
                 //we add the local client to the list of clients
                 node.addLocalClient();
@@ -381,7 +399,7 @@ package library.circulate
         
         private function onNodeDisconnect( netgroup:NetGroup, message:String = "" ):void
         {
-//            _log( "network.onNodeDisconnect()" );
+            _log( "Network.onNodeDisconnect( " + netgroup + ", " + message + " )" );
             
             var node:NetworkNode = _findNodeByGroup( netgroup );
             
@@ -396,7 +414,10 @@ package library.circulate
         
         private function _log( message:String ):void
         {
-            writer( message );
+            if( startsWith( message, ">" ) )
+            {
+                writer( message );
+            }
         }
         
         private function _warnAboutServerKey():void
@@ -409,6 +430,8 @@ package library.circulate
         
         private function _startTimeout():void
         {
+            _log( "Network._startTimeout()" );
+            
             _timer.addEventListener( TimerEvent.TIMER_COMPLETE, onTimeout );
             _timer.delay       = _config.connectionTimeout;
             _timer.repeatCount = 1;
@@ -452,21 +475,37 @@ package library.circulate
         
         private function _createCommandCenter():void
         {
+            _log( "Network._createCommandCenter()" );
+            
             createNode( config.commandCenter, NodeType.command );
+        }
+        
+        private function _destroyCommandCenter():void
+        {
+            _log( "Network._destroyCommandCenter()" );
+            
+            _commandCenter.leave();
+            _commandCenter = null;
         }
         
         private function _addNode( node:NetworkNode ):void
         {
+            _log( "Network._addNode( " + node + " )" );
+            
             _nodes.push( node );
         }
         
         private function _removeNode( index:uint ):void
         {
+            _log( "Network._removeNode( " + index + " )" );
+            
             _nodes.splice( index, 1 );
         }
         
         private function _findNode( name:String ):NetworkNode
         {
+            _log( "Network._findNode( " + name + " )" );
+            
             var i:uint;
             var node:NetworkNode;
             for( i = 0; i<_nodes.length; i++ )
@@ -484,6 +523,8 @@ package library.circulate
         
         private function _findNodeByGroup( netgroup:NetGroup ):NetworkNode
         {
+            _log( "Network._findNodeByGroup( " + netgroup + " )" );
+            
             var i:uint;
             var node:NetworkNode;
             for( i = 0; i<_nodes.length; i++ )
@@ -501,6 +542,8 @@ package library.circulate
         
         private function _findNodeByPeerIDAndAddress( peerID:String, address:String ):NetworkNode
         {
+            _log( "Network._findNodeByPeerIDAndAddress( " + peerID + ", " + address + " )" );
+            
             var i:uint;
             var node:NetworkNode;
             var groupaddress:String;
@@ -519,6 +562,26 @@ package library.circulate
             return null;
         }
         
+        private function _leaveAlldNode():void
+        {
+            _log( "Network._leaveAlldNode()" );
+            
+            var i:uint;
+            var node:NetworkNode;
+            for( i = 0; i<_nodes.length; i++ )
+            {
+                node = _nodes[ i ];
+                
+                if( node )
+                {
+                    node.leave();
+                }
+                
+                _removeNode( i );
+            }
+            
+            
+        }
         
         //--- public ---
         
@@ -582,6 +645,8 @@ package library.circulate
         */
         public function connect( server:String = "", key:String = "" ):void
         {
+            _log( "Network.connect( " + server + ", " + key + " )" );
+            
             if( server == "" )
             {
                 switch( type )
@@ -658,6 +723,8 @@ package library.circulate
         */
         public function disconnect():void
         {
+            _log( "Network.disconnect()" );
+            
             if( _connection )
             {
                 _connection.close();
@@ -676,7 +743,8 @@ package library.circulate
         */
         public function createNode( name:String, type:NodeType = null ):void
         {
-//            _log( ">>> creating Node \""+ name +"\"");
+            _log( "Network.createNode( " + name + ", " + type + " )" );
+            
             if( !connected )
             {
                 _info( "you need to connect first before joining a node." );
@@ -738,6 +806,8 @@ package library.circulate
         
         public function hasNode( name:String ):Boolean
         {
+            _log( "Network.hasNode( " + name + " )" );
+            
             if( !connected ) { return false; }
             
             if( _nodes.length == 0 ) { return false; }
@@ -754,6 +824,8 @@ package library.circulate
         
         public function joinNode( name:String ):void
         {
+            _log( "Network.joinNode( " + name + " )" );
+            
             var node:NetworkNode = _findNode( name );
             
             if( node )
@@ -768,6 +840,8 @@ package library.circulate
         
         public function leaveNode( name:String ):void
         {
+            _log( "Network.leaveNode( " + name + " )" );
+            
             var node:NetworkNode = _findNode( name );
             
             if( node )
@@ -782,6 +856,8 @@ package library.circulate
         
         public function sendCommandToNode( command:NetworkCommand, node:NetworkNode = null ):void
         {
+            _log( "Network.sendCommandToNode( " + command + ", " + node  + " )" );
+            
             if( !connected )
             {
                 _info( "you need to connect first before sending a message to a node." );
@@ -801,17 +877,15 @@ package library.circulate
                 }
             }
             
+            var groupAddress:String;
+            
             if( node )
             {
-                //node.sendToAll( command );
-                node.sendToAllNeighbors( command );
+                node.sendToAll( command );
             }
             else if( _commandCenter )
             {
-                //if no Node, we use by default the CommandCenter node
-                //_commandCenter.sendToAll( command );
-                _commandCenter.sendToAllNeighbors( command );
-                //_commandCenter.sendToNeighbor( command, NetGroupSendMode.NEXT_INCREASING );
+                _commandCenter.sendToAll( command );
             }
             else
             {
@@ -823,6 +897,8 @@ package library.circulate
         
         public function resetTimeout():void
         {
+            _log( "Network.resetTimeout()" );
+            
             if( connected )
             {
                 _timer.reset();
