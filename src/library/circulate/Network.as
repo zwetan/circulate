@@ -76,7 +76,7 @@ package library.circulate
     * for now we are managing only 1 network which can be of different types
     * local, test server, adobe server 
     */
-    public class Network extends EventDispatcher
+    public class Network extends EventDispatcher implements NetworkSystem
     {
         //--- static ---
         
@@ -874,6 +874,8 @@ package library.circulate
                     {
                         node = node2;
                     }
+                    
+                    //chatmsg.destination = node2.groupAddress;
                 }
             }
             
@@ -881,10 +883,12 @@ package library.circulate
             
             if( node )
             {
+                command.destination = node.groupAddress;
                 node.sendToAll( command );
             }
             else if( _commandCenter )
             {
+                command.destination = _commandCenter.groupAddress;
                 _commandCenter.sendToAll( command );
             }
             else
