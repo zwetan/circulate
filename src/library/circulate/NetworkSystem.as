@@ -14,6 +14,9 @@ package library.circulate
         function get enableErrorChecking():Boolean;
         function set enableErrorChecking( value:Boolean ):void;
         
+        function get writer():Function;
+        function set writer( value:Function ):void;
+        
         function get connection():NetConnection;
         function get client():NetworkClient;
         function get nodes():Vector.<NetworkNode>;
