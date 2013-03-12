@@ -45,5 +45,17 @@ package library.circulate
         
         function get peerID():String;
         function set peerID( value:String ):void;
+        
+        function get address():String;
+        function set address( value:String ):void;
+        
+        function get elected():Boolean;
+        function set elected( value:Boolean ):void;
+        
+        function get arrivedTime():Date;
+        function set arrivedTime( value:Date ):void;
+        
+        function get idleTime():Date;
+        function set idleTime( value:Date ):void;
     }
 }

@@ -35,6 +35,7 @@ the terms of any one of the MPL, the GPL or the LGPL.
 
 package library.circulate
 {
+    import flash.events.IEventDispatcher;
     import flash.net.GroupSpecifier;
     import flash.net.NetGroup;
     import flash.utils.Dictionary;
@@ -42,7 +43,7 @@ package library.circulate
     /**
      * 
      */
-    public interface NetworkNode
+    public interface NetworkNode extends IEventDispatcher
     {
         function get type():NodeType;
         function get name():String;
@@ -51,6 +52,7 @@ package library.circulate
         function get joined():Boolean;
         function get isElected():Boolean;
         function get isFullMesh():Boolean;
+        function get groupAddress():String;
         
         function get clients():Vector.<NetworkClient>;
         function get estimatedMemberCount():uint;
@@ -70,5 +72,6 @@ package library.circulate
         function sendToAll( command:NetworkCommand ):void;
         function sendTo( peerID:String, command:NetworkCommand ):void;
         function sendToUser( name:String, command:NetworkCommand ):void;
+        function sendToGroup( address:String, command:NetworkCommand ):void;
     }
 }

@@ -35,13 +35,42 @@ the terms of any one of the MPL, the GPL or the LGPL.
 
 package library.circulate
 {
+    import library.circulate.networks.Network;
+
     /**
-     * 
-     */
+    * A Network Command allows to transfer "commands"
+    * of different types over the network.
+    * 
+    * note:
+    * A Command can be wrapped into a Packet to automatically
+    * add a unique ID and automatically zip/unzip the data.
+    * 
+    * A Message is a default AMF Object. 
+    */
     public interface NetworkCommand
     {
+        /**
+        * The name of the network command. 
+        */
         function get name():String;
         
-        function execute( network:Network, node:NetworkNode ):void;
+        /**
+        * The group address where this command is supposed to arrive.
+        */
+        function get destination():String;
+        function set destination( value:String ):void;
+        
+        /**
+        * Allows to know if a Command need to be routed to another destination.
+        */
+        function get isRouted():Boolean;
+        
+        /**
+        * Process the command.
+        * Here we use basic polymorphism to automatically parse the command
+        * eg. each command is responsible for its own execution to avoid
+        * long switch between command type/name.
+        */
+        function execute( network:NetworkSystem, node:NetworkNode ):void;
     }
 }
