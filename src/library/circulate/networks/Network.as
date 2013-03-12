@@ -54,6 +54,15 @@ package library.circulate.networks
     import flash.utils.Dictionary;
     import flash.utils.Timer;
     
+    import library.circulate.NetworkClient;
+    import library.circulate.NetworkCommand;
+    import library.circulate.NetworkConfiguration;
+    import library.circulate.NetworkNode;
+    import library.circulate.NetworkStrings;
+    import library.circulate.NetworkSystem;
+    import library.circulate.NetworkType;
+    import library.circulate.NodeType;
+    import library.circulate.Packet;
     import library.circulate.clients.Client;
     import library.circulate.commands.ChatMessage;
     import library.circulate.commands.ConnectNetwork;
@@ -67,15 +76,6 @@ package library.circulate.networks
     import library.circulate.utils.getLocalUserName;
     import library.circulate.utils.traceConnectivityResults;
     import library.circulate.utils.traceNetworkInterfaces;
-    import library.circulate.NetworkClient;
-    import library.circulate.NetworkCommand;
-    import library.circulate.NetworkConfiguration;
-    import library.circulate.NetworkNode;
-    import library.circulate.NetworkStrings;
-    import library.circulate.NetworkSystem;
-    import library.circulate.NetworkType;
-    import library.circulate.NodeType;
-    import library.circulate.Packet;
 
     /**
     * A Network is responsible for creating, connecting and managing Nodes.
@@ -180,7 +180,7 @@ package library.circulate.networks
         
         private var _timer:Timer;
         
-        public var writer:Function;
+        private var _writer:Function;
         
         public function Network( type:NetworkType = null , config:NetworkConfiguration = null )
         {
@@ -192,9 +192,11 @@ package library.circulate.networks
             _enableErrorChecking = _config.enableErrorChecking;
             
             _local               = new Client( _config.username );
+            _local.arrivedTime   = new Date();
+            _local.idleTime      = new Date();
             _timer               = new Timer( _config.connectionTimeout );
             
-            writer               = trace;
+            _writer              = trace; //by default
             
             _reset();
             
@@ -344,7 +346,7 @@ package library.circulate.networks
                 _startTimeout();
             }
         }
-         
+        
         private function onDisconnect( message:String = "" ):void
         {
             _log( "Network.onDisconnect( " + message + " )" );
@@ -487,6 +489,12 @@ package library.circulate.networks
             _log( "Network._createCommandCenter()" );
             
             createNode( config.commandCenter, NodeType.command );
+            
+            if( _commandCenter )
+            {
+                var networkevent:NetworkEvent = new NetworkEvent( NetworkEvent.COMMANDCENTER_READY );
+                dispatchEvent( networkevent );
+            }
         }
         
         private function _destroyCommandCenter():void
@@ -602,6 +610,9 @@ package library.circulate.networks
         /** Specifies whether errors encountered by the network are reported to the application. */
         public function get enableErrorChecking():Boolean { return _enableErrorChecking; }
         public function set enableErrorChecking( value:Boolean ):void { _enableErrorChecking = value; }
+        
+        public function get writer():Function { return _writer; }
+        public function set writer( value:Function ):void { _writer = value; }
         
         public function get connection():NetConnection { return _connection; }
         
@@ -804,6 +815,7 @@ package library.circulate.networks
                 if( node )
                 {
                     _addNode( node );
+                    
                     node.join();
                 }
                 else
