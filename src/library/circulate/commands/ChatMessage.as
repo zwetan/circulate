@@ -5,16 +5,19 @@ package library.circulate.commands
     
     import flash.net.registerClassAlias;
     
-    import library.circulate.Network;
     import library.circulate.NetworkClient;
     import library.circulate.NetworkCommand;
     import library.circulate.NetworkNode;
+    import library.circulate.NetworkSystem;
     import library.circulate.UniquePacket;
+    import library.circulate.networks.Network;
     
     registerClassAlias( "library.circulate.commands.ChatMessage", ChatMessage );
     
     public class ChatMessage implements NetworkCommand
     {
+        private var _destination:String = "";
+        
         public var message:String;
         public var peerID:String;
         public var nodename:String;
@@ -25,15 +28,28 @@ package library.circulate.commands
                                      nodename:String = "",
                                      id:String = "" )
         {
-            this.message  = message;
-            this.peerID   = peerID;
-            this.nodename = nodename;
-            this.id       = id;
+            this.message     = message;
+            this.peerID      = peerID;
+            this.nodename    = nodename;
+            this.id          = id;
         }
         
         public function get name():String { return getClassName( this ); }
         
-        public function execute( network:Network, node:NetworkNode ):void
+        public function get destination():String { return _destination; }
+        public function set destination( value:String ):void { _destination = value; }
+        
+        public function get isRouted():Boolean
+        {
+            if( destination != "" )
+            {
+                return true;
+            }
+            
+            return false;
+        }
+        
+        public function execute( network:NetworkSystem, node:NetworkNode ):void
         {
             var _log:Function = network.writer;
 //                _log( "command [" + name + "]" );
@@ -57,15 +73,16 @@ package library.circulate.commands
             
             if( message == "" )
             {
-                if( peerID != "" )
-                {
-                    client = node.findClientByPeerID( peerID );
-                    if( client == network.client )
-                    {
-                        _log( "your last message may have not arrived to destination" );
-                    }
-                }
+//                if( peerID != "" )
+//                {
+//                    client = node.findClientByPeerID( peerID );
+//                    if( client == network.client )
+//                    {
+//                        _log( "your last message may have not arrived to destination" );
+//                    }
+//                }
                 
+                _log( ">>>>> your last message may have not arrived to destination" );
                 return;
             }
             

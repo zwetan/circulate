@@ -4,7 +4,7 @@ package library.circulate.commands
     
     import flash.net.registerClassAlias;
     
-    import library.circulate.Network;
+    import library.circulate.networks.Network;
     import library.circulate.NetworkClient;
     import library.circulate.NetworkCommand;
     import library.circulate.NetworkNode;

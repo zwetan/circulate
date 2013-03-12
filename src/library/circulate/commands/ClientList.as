@@ -8,25 +8,20 @@ package library.circulate.commands
     import library.circulate.NetworkCommand;
     import library.circulate.NetworkNode;
     import library.circulate.NetworkSystem;
+    import library.circulate.clients.Client;
     import library.circulate.networks.Network;
     
-    registerClassAlias( "library.circulate.commands.LeaveNode", LeaveNode );
+    registerClassAlias( "library.circulate.commands.ClientList", ClientList );
     
-    public class LeaveNode implements NetworkCommand
+    public class ClientList implements NetworkCommand
     {
         private var _destination:String = "";
         
-        public var username:String;
-        public var peerID:String;
-        public var timestamp:uint;
+        public var clients:Vector.<NetworkClient>;
         
-        public function LeaveNode( username:String = "",
-                                   peerID:String = "",
-                                   timestamp:uint = 0 )
+        public function ClientList( clients:Vector.<NetworkClient> = null )
         {
-            this.username  = username;
-            this.peerID    = peerID;
-            this.timestamp = timestamp;
+            clients = clients;
         }
         
         public function get name():String { return getClassName( this ); }
@@ -48,11 +43,18 @@ package library.circulate.commands
         {
             var _log:Function = network.writer;
 //                _log( "command [" + name + "]" );
-//                _log( "  |_ username: " + username );
-//                _log( "  |_ peerID: " + peerID );
-//                _log( "  |_ timestamp: " + timestamp );
+//                _log( "  |_ clients: " + clients );
             
-            _log( ">>>>> client <" + username +"> left [" + node.name + "]" );
+            if( clients )
+            {
+                trace( "received list of " + clients.length + " clients:" );
+                var i:uint;
+                for( i=0; i<clients.length; i++ )
+                {
+                    trace( i + " : " + Client(clients[i]).toString() );
+                }
+            }
+            
         }
     }
 }
