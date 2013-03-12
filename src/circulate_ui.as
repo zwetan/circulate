@@ -26,6 +26,9 @@ package
         public var undertitle:TextField;
         public var connectionDot:Sprite;
         
+//        public var area:Sprite;
+        
+        
         public var bgoutput:TextField;
         public var output:TextField;
         public var input:TextField;
@@ -95,7 +98,10 @@ package
             undertitle.height = 20;
             connectionDot.x = stage.stageWidth - ( connectionDot.width + 5 );
             connectionDot.y = ( 2 );
-
+            
+//            area.x = stage.stageWidth/2;
+//            area.y = stage.stageHeight/2;
+            
             bgoutput.width  = stage.stageWidth - 1;
             bgoutput.height = stage.stageHeight - ( 40 ) - 20 - 1;
             bgoutput.y      =  undertitle.y + undertitle.height;
@@ -154,7 +160,14 @@ package
             connectionDot.graphics.beginFill( 0x000000, 1.0 );
             connectionDot.graphics.drawRoundRect( 0, 0, 16, 16, 16, 16 );
             connectionDot.graphics.endFill();
-
+            
+//            area = new Sprite();
+//            area.graphics.clear();
+//            area.graphics.beginFill( 0x000000, 0.6 );
+//            area.graphics.drawCircle( 0, 0, 120 );
+//            area.graphics.drawCircle( 0, 0, 80 );
+//            area.graphics.endFill();
+            
             bgoutput = new TextField();
             bgoutput.border = true;
             bgoutput.borderColor = 0x0000ff;
@@ -188,6 +201,7 @@ package
             
             //default
             _colorize( connectionDot, 0xcccccc );
+//            _colorize( area, 0xff00cc );
             title.text = "unknown";
             undertitle.text = "000000";
             circle.x = stage.stageWidth/2;
@@ -198,6 +212,9 @@ package
             addChild( title );
             addChild( undertitle );
             addChild( connectionDot );
+            
+//            addChild( area );
+            
             addChild( bgoutput );
             addChild( output );
             addChild( input );

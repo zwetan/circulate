@@ -41,17 +41,24 @@ package
     import flash.display.Sprite;
     import flash.events.Event;
     import flash.geom.ColorTransform;
+    import flash.utils.Dictionary;
     import flash.utils.setTimeout;
     
-    import library.circulate.Network;
+    import library.circulate.AutomaticDistributedElection;
     import library.circulate.NetworkClient;
     import library.circulate.NetworkCommand;
     import library.circulate.NetworkConfiguration;
     import library.circulate.NetworkNode;
+    import library.circulate.NetworkSystem;
     import library.circulate.NetworkType;
     import library.circulate.commands.ChatMessage;
+    import library.circulate.commands.ClientList;
     import library.circulate.commands.RequestInformation;
+    import library.circulate.events.ClientEvent;
     import library.circulate.events.NetworkEvent;
+    import library.circulate.networks.LocalAreaNetwork;
+    import library.circulate.networks.Network;
+    import library.circulate.nodes.Node;
     import library.circulate.utils.getLocalUserName;
     import library.circulate.utils.traceNetworkInterfaces;
 
@@ -62,7 +69,7 @@ package
         
         
         public var config:NetworkConfiguration;
-        public var localAreaNetwork:Network;
+        public var localAreaNetwork:NetworkSystem;
         
         public function circulate_test()
         {
@@ -193,12 +200,13 @@ package
             //override
             config.username = "test" + _randomRange( 0, 1000 );
             //config.connectionTimeout = 5 * 1000;
-            //config.loopback = false;
+            config.loopback = false;
             
             //configure
             //config.serverKey = "503a63139c4a687fc822004e-7d1c016995c5";
             
-            localAreaNetwork = new Network( NetworkType.local, config );
+            //localAreaNetwork = new Network( NetworkType.local, config );
+            localAreaNetwork = new LocalAreaNetwork( config );
             localAreaNetwork.writer = writeline;
             //localAreaNetwork = new Network();
             
@@ -206,6 +214,7 @@ package
             
             localAreaNetwork.addEventListener( NetworkEvent.CONNECTED, onNetworkConnect );
             localAreaNetwork.addEventListener( NetworkEvent.DISCONNECTED, onNetworkDisconnect );
+            localAreaNetwork.addEventListener( NetworkEvent.COMMANDCENTER_READY, onNetworkCommandCenterReady );
             
             //localAreaNetwork.connect();
             //localAreaNetwork.connect( config.localArea );
@@ -216,65 +225,91 @@ package
             localAreaNetwork.connect();
 //            var sec:uint = _randomRange( 0, 30 );
 //            var dolater0:uint = setTimeout( function():void { localAreaNetwork.connect(); }, (sec*1000) );
+
+
+            var netsys:NetworkSystem = localAreaNetwork;
+                //netsys.
+            
+            var cmd:ClientList = new ClientList();
         }
         
         private var _loopcount:uint = 0;
         private var _loopmax:uint   = 10;
         
-        private function onLoop( event:Event = null ):void
-        {
-            clearBackground();
-            
-            if( _loopcount >= _loopmax )
-            {
-                _loopcount = 0;
-            }
-            
-            _loopcount++;
-            
-            var i:uint;
-            var j:uint;
-            var node:NetworkNode;
-            var client:NetworkClient;
-            var post:String = "";
-            var elect:String = "(elected) ";
-            
-            writelineToBackground( "nodes:" );
-            writelineToBackground( "------" );
-            for( i=0; i<localAreaNetwork.nodes.length; i++ )
-            {
-                node = localAreaNetwork.nodes[i];
-                writelineToBackground( (node.isElected ? elect: "") + node.name );
-                writelineToBackground( node.group.neighborCount  + " :neighbours _| " );
-                writelineToBackground( node.estimatedMemberCount + "    :members _| " );
-                writelineToBackground( node.clients.length       + "    :clients _| " );
-                for( j=0; j<node.clients.length; j++ )
-                {
-                    client = node.clients[ j ];
-                    if( client == localAreaNetwork.client )
-                    {
-                        post = "(me) ";
-                    }
-                    else
-                    {
-                        post = "";
-                    }
-                    
-                    writelineToBackground( post + "["+j+"]: " + client.username );
-                    
-                    if( (client.username == "") && (_loopcount == _loopmax) )
-                    {
-                        var request:NetworkCommand = new RequestInformation( localAreaNetwork.client.peerID );
-                        node.sendTo( client.peerID, request );
-                    }
-                    
-                }
-            }
-            
-            writelineToBackground( "" );
-            
-        }
+        private var _UIdots:Dictionary = new Dictionary();
         
+//        private function onLoop( event:Event = null ):void
+//        {
+//            clearBackground();
+//            
+//            if( _loopcount >= _loopmax )
+//            {
+//                _loopcount = 0;
+//            }
+//            
+//            _loopcount++;
+//            
+//            var i:uint;
+//            var j:uint;
+//            var k:uint;
+//            var node:NetworkNode;
+//            var client:NetworkClient;
+//            var post:String = "";
+//            var elect:String = "(elected) ";
+//            var ringspan:String;
+//            
+//            writelineToBackground( "nodes:" );
+//            writelineToBackground( "------" );
+//            for( i=0; i<localAreaNetwork.nodes.length; i++ )
+//            {
+//                node = localAreaNetwork.nodes[i];
+//                Node(node).onRemoveClientHook = removeClientCircle;
+//                writelineToBackground( (node.isElected ? elect: "") + node.name );
+//                writelineToBackground( node.group.neighborCount  + " :neighbours _| " );
+//                writelineToBackground( node.estimatedMemberCount + "    :members _| " );
+//                writelineToBackground( node.clients.length       + "    :clients _| " );
+//                for( j=0; j<node.clients.length; j++ )
+//                {
+//                    client = node.clients[ j ];
+//                    if( client == localAreaNetwork.client )
+//                    {
+//                        post = "(me) ";
+//                    }
+//                    else
+//                    {
+//                        post = "";
+//                    }
+//                    
+//                    ringspan = AutomaticDistributedElection.getRingSpan( client.peerID );
+//                    writelineToBackground( post + "["+j+"]: " + client.username + "[" + ringspan + "]" + (client.elected ? "(E)": "") );
+//                    if( !_UIdots[client.peerID] )
+//                    {
+//                        _UIdots[ client.peerID ] = new UIClientDot( client );
+//                        addChild( _UIdots[ client.peerID ] );
+//                    }
+//                    _UIdots[ client.peerID ].alignOnRing( area, ringspan );
+//                    _UIdots[ client.peerID ].update( client );
+//                    
+//                    
+//                    if( (client.username == "") && (_loopcount == _loopmax) )
+//                    {
+//                        var request:NetworkCommand = new RequestInformation( localAreaNetwork.client.peerID );
+//                        node.sendTo( client.peerID, request );
+//                    }
+//                    
+//                }
+//                
+//            }
+//            
+//            writelineToBackground( "" );
+//            
+//        }
+        
+        public function removeClientCircle( client:NetworkClient ):void
+        {
+            var peerID:String = client.peerID;
+            removeChild( _UIdots[ peerID ] );
+        }
         
         public function onNetworkConnect( event:NetworkEvent ):void
         {
@@ -285,15 +320,72 @@ package
             
             //var dolater1:uint = setTimeout( function():void { localAreaNetwork.createNode( "test" ); }, 10000 ); 
             
-            addEventListener( Event.ENTER_FRAME, onLoop );
+            //addEventListener( Event.ENTER_FRAME, onLoop );
         }
         
         public function onNetworkDisconnect( event:NetworkEvent ):void
         {
             trace( "test disconnected" );
             updateConnection( 0xff0000 );
-            removeEventListener( Event.ENTER_FRAME, onLoop );
+            //removeEventListener( Event.ENTER_FRAME, onLoop );
             clearBackground();
+        }
+        
+        public var commandcenter:UICommandCenter;
+        
+        public function onNetworkCommandCenterReady( event:NetworkEvent ):void
+        {
+            commandcenter = new UICommandCenter();
+            addChild( commandcenter );
+            
+            localAreaNetwork.commandCenter.addEventListener( ClientEvent.CONNECTED, onClientConnect );
+            localAreaNetwork.commandCenter.addEventListener( ClientEvent.ADDED, onClientConnect );
+            localAreaNetwork.commandCenter.addEventListener( ClientEvent.REMOVED, onClientDisconnect );
+            localAreaNetwork.commandCenter.addEventListener( ClientEvent.UPDATED, onClientUpdate );
+        }
+        
+        public function addClientDot( clientdot:UIClientDot ):void
+        {
+            addChild( clientdot );
+            var client:NetworkClient = clientdot.client;
+            var ringspan:String = AutomaticDistributedElection.getRingSpan( client.peerID );
+            
+            //clientdot.alignOnRing( this, ringspan );
+            clientdot.alignOnRing( commandcenter, ringspan );
+        }
+        
+        private function onClientConnect( event:ClientEvent ):void
+        {
+            var client:NetworkClient = event.client;
+            var node:NetworkNode = event.target as NetworkNode;
+            trace( "node = " + node );
+            trace( "client = " + client );
+            if( client )
+            {
+                _UIdots[ client.peerID ] = new UIClientDot( client );
+                addClientDot( _UIdots[ client.peerID ] );
+                
+            }
+        }
+        
+        private function onClientDisconnect( event:ClientEvent ):void
+        {
+            var client:NetworkClient = event.client;
+            
+            if( client )
+            {
+                removeChild( _UIdots[ client.peerID ] );
+            }
+        }
+        
+        private function onClientUpdate( event:ClientEvent ):void
+        {
+            var client:NetworkClient = event.client;
+            
+            if( client )
+            {
+                _UIdots[ client.peerID ].update( client );
+            }
         }
         
         public function sendCustomCommand():void
