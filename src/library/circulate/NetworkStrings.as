@@ -1,5 +1,8 @@
 package library.circulate
 {
+    /**
+    * Network ressource strings
+    */
     public class NetworkStrings
     {
         public function NetworkStrings()
