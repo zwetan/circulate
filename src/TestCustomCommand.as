@@ -5,10 +5,11 @@ package
     import flash.display.DisplayObject;
     import flash.net.registerClassAlias;
     
-    import library.circulate.Network;
     import library.circulate.NetworkClient;
     import library.circulate.NetworkCommand;
     import library.circulate.NetworkNode;
+    import library.circulate.NetworkSystem;
+    import library.circulate.networks.Network;
     
     /* Test class that illustrates how you can create your own
        custom network commands
@@ -38,6 +39,8 @@ package
         //to hold our ref but we don't serialize/deserialize it
         static public var reference:DisplayObject;
         
+        private var _destination:String = "";
+        
         public var peerID:String;
         public var x:Number;
         public var y:Number;
@@ -51,7 +54,20 @@ package
         
         public function get name():String { return getClassName( this ); }
         
-        public function execute( network:Network, node:NetworkNode ):void
+        public function get destination():String { return _destination; }
+        public function set destination( value:String ):void { _destination = value; }
+        
+        public function get isRouted():Boolean
+        {
+            if( destination != "" )
+            {
+                return true;
+            }
+            
+            return false;
+        }
+        
+        public function execute( network:NetworkSystem, node:NetworkNode ):void
         {
             var _log:Function = network.writer;
                 _log( "command [" + name + "]" );
