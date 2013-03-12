@@ -15,7 +15,6 @@ package library.circulate.nodes
     import flashx.textLayout.events.UpdateCompleteEvent;
     
     import library.circulate.AutomaticDistributedElection;
-    import library.circulate.networks.Network;
     import library.circulate.NetworkClient;
     import library.circulate.NetworkCommand;
     import library.circulate.NetworkNode;
@@ -26,6 +25,9 @@ package library.circulate.nodes
     import library.circulate.commands.ChatMessage;
     import library.circulate.commands.JoinNode;
     import library.circulate.commands.KeepAlive;
+    import library.circulate.events.ClientEvent;
+    import library.circulate.events.NeighborEvent;
+    import library.circulate.networks.Network;
     
     /**
     * A Node is responsible for creating, connecting and managing Clients.
@@ -152,7 +154,14 @@ package library.circulate.nodes
             
             _addNeighbour( peerID );
             
-            onNeighborConnectAction( peerID, address );
+            //onNeighborConnectAction( peerID, address );
+            
+            var client:NetworkClient = new Client();
+                client.peerID  = peerID;
+                client.address = address;
+            
+            var neighborevent:NeighborEvent = new NeighborEvent( NeighborEvent.CONNECT, client );
+            dispatchEvent( neighborevent );
         }
         
         private function onNeighborDisconnect( peerID:String, address:String ):void
@@ -161,10 +170,13 @@ package library.circulate.nodes
             
             var client:NetworkClient = _findClientByPeerID( peerID );
             var index:uint = _findClientIndex( client );
-            var username:String = client.username;
+            //var username:String = client.username;
             
             _removeClient( index );
-            onNeighborDisconnectAction( peerID, address, username );
+            //onNeighborDisconnectAction( peerID, address, username );
+            
+            var neighborevent:NeighborEvent = new NeighborEvent( NeighborEvent.DISCONNECT, client );
+            dispatchEvent( neighborevent );
         }
         
         private function onLocalCoverageNotify():void
@@ -184,17 +196,25 @@ package library.circulate.nodes
             {
                 _log( "Election change: " + (election ? "elected" : "not elected") );
                 
-                _network.client.elected = election;
+                var client:NetworkClient = _network.client;
+                    client.elected = election;
                 
                 var now:Date = new Date();
+                _network.client.idleTime = now;
                 var cmd:KeepAlive = new KeepAlive();
-                    cmd.username  = _network.client.username;
-                    cmd.peerID    = _network.client.peerID;
+                    cmd.username  = client.username;
+                    cmd.peerID    = client.peerID;
+                    cmd.address   = groupAddress;
+                    cmd.elected   = client.elected;
+                    cmd.arrived   = client.arrivedTime;
+                    cmd.idle      = client.idleTime;
                     cmd.timestamp = now.valueOf();
-                    cmd.elected   = _network.client.elected;
+                    
                 
-                //sendToAll( cmd );
-                post( cmd );
+                var clientevent:ClientEvent = new ClientEvent( ClientEvent.UPDATED, client );
+                dispatchEvent( clientevent );
+                sendToAll( cmd );
+                //post( cmd );
             }
             
             _isElected = election;
@@ -362,6 +382,9 @@ package library.circulate.nodes
             }
             
             _clients.push( client );
+            
+            var clientevent:ClientEvent = new ClientEvent( ClientEvent.ADDED, client );
+            dispatchEvent( clientevent );
         }
         
         private function _removeClient( index:uint ):void
@@ -371,16 +394,19 @@ package library.circulate.nodes
             var client:NetworkClient = _clients[ index ];
             
             _clients.splice( index, 1 );
-            onRemoveClient( client );
+            //onRemoveClient( client );
+            
+            var clientevent:ClientEvent = new ClientEvent( ClientEvent.REMOVED, client );
+            dispatchEvent( clientevent );
         }
         
-        public var onRemoveClientHook:Function;
-        
-        protected function onRemoveClient( client:NetworkClient ):void
-        {
-            trace( "onRemoveClient()" );
-            onRemoveClientHook( client );
-        }
+//        public var onRemoveClientHook:Function;
+//        
+//        protected function onRemoveClient( client:NetworkClient ):void
+//        {
+//            trace( "onRemoveClient()" );
+//            onRemoveClientHook( client );
+//        }
         
         private function _removeAllClient():void
         {
@@ -459,8 +485,11 @@ package library.circulate.nodes
         {
             _log( "Node._addLocalClient()" );
             
-            _addClient( _network.client );
+            var local:NetworkClient = _network.client;
+            trace( "local = " + local );
+            _addClient( local );
             _joined = true;
+            
         }
         
         private function _removeLocalClient():void
