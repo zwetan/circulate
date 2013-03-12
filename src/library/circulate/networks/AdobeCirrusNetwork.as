@@ -1,6 +1,5 @@
 package library.circulate.networks
 {
-    import library.circulate.Network;
     import library.circulate.NetworkConfiguration;
     import library.circulate.NetworkType;
     
