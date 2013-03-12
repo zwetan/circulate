@@ -3,9 +3,9 @@ package library.circulate.nodes
     import flash.net.GroupSpecifier;
     import flash.net.NetGroupReceiveMode;
     
-    import library.circulate.Network;
+    import library.circulate.networks.Network;
     
-    public class MixedRoutingNode extends BaseNode
+    public class MixedRoutingNode extends Node
     {
         public function MixedRoutingNode( network:Network, name:String="" )
         {

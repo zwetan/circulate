@@ -33,7 +33,7 @@ package library.circulate.nodes
     * 
     * This is the Base class for all NetworkNode.
     */
-    public class BaseNode extends EventDispatcher implements NetworkNode
+    public class Node extends EventDispatcher implements NetworkNode
     {
         protected var FULLMESH:uint      = 14;
         
@@ -49,7 +49,7 @@ package library.circulate.nodes
         
         private var _clients:Vector.<NetworkClient>;
         
-        public function BaseNode( network:Network, name:String = "", specifier:GroupSpecifier = null )
+        public function Node( network:Network, name:String = "", specifier:GroupSpecifier = null )
         {
             if( !specifier )
             {

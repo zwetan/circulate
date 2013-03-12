@@ -3,7 +3,7 @@ package library.circulate.nodes
     import flash.net.GroupSpecifier;
     import flash.net.NetGroupReceiveMode;
     
-    import library.circulate.Network;
+    import library.circulate.networks.Network;
     
     /* note:
        
@@ -12,7 +12,7 @@ package library.circulate.nodes
        - NetGroup.Posting.Notifyevent
        
     */
-    public class PostingNode extends BaseNode
+    public class PostingNode extends Node
     {
         public function PostingNode( network:Network, name:String = "" )
         {

@@ -3,7 +3,7 @@ package library.circulate.nodes
     import flash.net.GroupSpecifier;
     import flash.net.NetGroupReceiveMode;
     
-    import library.circulate.Network;
+    import library.circulate.networks.Network;
     
     /* note:
        
@@ -62,7 +62,7 @@ package library.circulate.nodes
        and it was forwarded toward its destination.
        
     */
-    public class DirectRoutingNode extends BaseNode
+    public class DirectRoutingNode extends Node
     {
         public function DirectRoutingNode( network:Network, name:String = "" )
         {

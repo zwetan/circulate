@@ -3,13 +3,13 @@ package library.circulate.nodes
     import flash.net.GroupSpecifier;
     import flash.net.NetGroupReceiveMode;
     
-    import library.circulate.Network;
+    import library.circulate.networks.Network;
     import library.circulate.NetworkClient;
     import library.circulate.NetworkCommand;
     import library.circulate.NodeType;
     import library.circulate.commands.JoinNode;
     
-    public class ChatNode extends BaseNode
+    public class ChatNode extends Node
     {
         
         public function ChatNode( network:Network, name:String = "" )
@@ -34,8 +34,10 @@ package library.circulate.nodes
             var timestamp:uint = now.valueOf();
             var client:NetworkClient = _network.client;
             var cmd:NetworkCommand = new JoinNode( client.username, client.peerID, timestamp );
+                cmd.destination = address
             
-            sendTo( peerID, cmd );
+            //sendTo( peerID, cmd );
+            sendToGroup( address, cmd );
         }
         
     }
