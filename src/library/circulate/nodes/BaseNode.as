@@ -3,6 +3,7 @@ package library.circulate.nodes
     import core.strings.format;
     import core.strings.startsWith;
     
+    import flash.events.EventDispatcher;
     import flash.events.NetStatusEvent;
     import flash.net.GroupSpecifier;
     import flash.net.NetGroup;
@@ -14,7 +15,7 @@ package library.circulate.nodes
     import flashx.textLayout.events.UpdateCompleteEvent;
     
     import library.circulate.AutomaticDistributedElection;
-    import library.circulate.Network;
+    import library.circulate.networks.Network;
     import library.circulate.NetworkClient;
     import library.circulate.NetworkCommand;
     import library.circulate.NetworkNode;
@@ -24,6 +25,7 @@ package library.circulate.nodes
     import library.circulate.clients.Client;
     import library.circulate.commands.ChatMessage;
     import library.circulate.commands.JoinNode;
+    import library.circulate.commands.KeepAlive;
     
     /**
     * A Node is responsible for creating, connecting and managing Clients.
@@ -31,7 +33,7 @@ package library.circulate.nodes
     * 
     * This is the Base class for all NetworkNode.
     */
-    public class BaseNode implements NetworkNode
+    public class BaseNode extends EventDispatcher implements NetworkNode
     {
         protected var FULLMESH:uint      = 14;
         
@@ -39,6 +41,7 @@ package library.circulate.nodes
         protected var _name:String       = "";
         protected var _joined:Boolean;
         protected var _isElected:Boolean;
+        protected var _groupAddress:String;
         
         protected var _network:Network;
         protected var _group:NetGroup;
@@ -180,6 +183,18 @@ package library.circulate.nodes
             if( election != _isElected )
             {
                 _log( "Election change: " + (election ? "elected" : "not elected") );
+                
+                _network.client.elected = election;
+                
+                var now:Date = new Date();
+                var cmd:KeepAlive = new KeepAlive();
+                    cmd.username  = _network.client.username;
+                    cmd.peerID    = _network.client.peerID;
+                    cmd.timestamp = now.valueOf();
+                    cmd.elected   = _network.client.elected;
+                
+                //sendToAll( cmd );
+                post( cmd );
             }
             
             _isElected = election;
@@ -215,8 +230,8 @@ package library.circulate.nodes
                    is always resolvedto "null" (strange, bug?)
                 */
                 _log( "cmd is null" );
-                var groupAddress:String = _group.convertPeerIDToGroupAddress( _network.client.peerID );
-                sendToNearest( cmd, groupAddress );
+                //var groupAddress:String = _group.convertPeerIDToGroupAddress( _network.client.peerID );
+                //sendToNearest( cmd, groupAddress );
             }
             
         }
@@ -250,22 +265,54 @@ package library.circulate.nodes
             
             if( cmd )
             {
+                _log( "command is not null" );
+                _log( "destination = " + cmd.destination );
                 
-                if( isLocal )
+                if( cmd.isRouted && (cmd.destination == groupAddress) )
                 {
-                    _log( "command roundtriped back to you" );
-//                    if( _network.config.loopback )
-//                    {
-//                        cmd.execute( _network, this );
-//                    }
-                }
-                else
-                {
-                    cmd.execute( _network, this );
+                    _log( "command arrived to destination" );
                     
-                    //sendToNearest( cmd, address, true );
-                    //sendToNeighbor( cmd, NetGroupSendMode.NEXT_INCREASING );
+                    if( isLocal && _network.config.loopback )
+                    {
+                        _log( ">>>> A" );
+                        _log( "command roundtriped back to you" );
+                        cmd.execute( _network, this );
+                    }
+                    else if( _network.config.loopback )
+                    {
+                        _log( ">>>> B" );
+                        _log( "command is not from self but address found" );
+                        
+                        cmd.execute( _network, this );
+                        //sendToNearest( cmd, cmd.destination );
+                    }
+                    
                 }
+                else if( !isLocal )
+                {
+                    _log( ">>>> C" );
+                    _log( "command is not from self" );
+                    cmd.execute( _network, this );
+                    sendToNearest( cmd, cmd.destination );
+                }
+                
+                
+                
+//                if( isLocal )
+//                {
+//                    _log( "command roundtriped back to you" );
+////                    if( _network.config.loopback )
+////                    {
+////                        cmd.execute( _network, this );
+////                    }
+//                }
+//                else
+//                {
+//                    cmd.execute( _network, this );
+//                    
+//                    //sendToNearest( cmd, address, true );
+//                    //sendToNeighbor( cmd, NetGroupSendMode.NEXT_INCREASING );
+//                }
                 
                 //sendToNeighbor( cmd, NetGroupSendMode.NEXT_INCREASING );
                 //sendToNeighbor( cmd, NetGroupSendMode.NEXT_DECREASING );
@@ -277,6 +324,9 @@ package library.circulate.nodes
 //                var empty:NetworkCommand = new ChatMessage( "", address, "", "" );
 //                //sendToAll( empty );
 //                sendToAllNeighbors( empty );
+                var empty:NetworkCommand = new ChatMessage( "", address, "", "" );
+                    empty.destination = address;
+                sendTo( address, empty );
             }
             
         }
@@ -292,6 +342,8 @@ package library.circulate.nodes
             {
                 log( message );
             }
+
+//            log( message );
         }
         
         private function _addClient( client:NetworkClient ):void
@@ -316,7 +368,18 @@ package library.circulate.nodes
         {
             _log( "Node._removeClient( " + index + " )" );
             
+            var client:NetworkClient = _clients[ index ];
+            
             _clients.splice( index, 1 );
+            onRemoveClient( client );
+        }
+        
+        public var onRemoveClientHook:Function;
+        
+        protected function onRemoveClient( client:NetworkClient ):void
+        {
+            trace( "onRemoveClient()" );
+            onRemoveClientHook( client );
         }
         
         private function _removeAllClient():void
@@ -613,6 +676,16 @@ package library.circulate.nodes
             return false;
         }
         
+        public function get groupAddress():String
+        {
+            if( _group && !_groupAddress )
+            {
+                _groupAddress = _group.convertPeerIDToGroupAddress( _network.client.peerID );
+            }
+            
+            return _groupAddress;
+        }
+        
         public function get clients():Vector.<NetworkClient> { return _clients; }
         
         public function get estimatedMemberCount():uint
@@ -689,7 +762,9 @@ package library.circulate.nodes
             
             if( isFullMesh )
             {
-                var result:String = sendToAllNeighbors( command );
+                //var result:String = sendToAllNeighbors( command );
+                //var result:String = sendToNearest( command, _groupAddress );
+                var result:String = sendToNeighbor( command, NetGroupSendMode.NEXT_DECREASING );
                 onMessageRouted( result );
             }
             else
@@ -698,10 +773,10 @@ package library.circulate.nodes
                 onMessagePosted( messageID );
             }
             
-            if( _network.config.loopback )
-            {
-                command.execute( _network, this );
-            }
+//            if( _network.config.loopback )
+//            {
+//                command.execute( _network, this );
+//            }
             
         }
         
@@ -723,6 +798,11 @@ package library.circulate.nodes
             {
                 trace( "username \"" + name + "\" did not resolve to a known client" );
             }
+        }
+        
+        public function sendToGroup( address:String, command:NetworkCommand ):void
+        {
+            sendToNearest( command, address );
         }
         
         public function addLocalClient():void { _log( "Node.addLocalClient()" ); _addLocalClient(); }
