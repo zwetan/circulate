@@ -35,8 +35,6 @@ the terms of any one of the MPL, the GPL or the LGPL.
 
 package library.circulate.networks
 {
-    import core.assert;
-    import core.dump;
     import core.strings.endsWith;
     import core.strings.format;
     import core.strings.startsWith;
@@ -47,11 +45,8 @@ package library.circulate.networks
     import flash.net.GroupSpecifier;
     import flash.net.NetConnection;
     import flash.net.NetGroup;
-    import flash.net.NetGroupReceiveMode;
-    import flash.net.NetGroupSendMode;
     import flash.net.ObjectEncoding;
     import flash.utils.ByteArray;
-    import flash.utils.Dictionary;
     import flash.utils.Timer;
     
     import library.circulate.NetworkClient;
@@ -65,14 +60,10 @@ package library.circulate.networks
     import library.circulate.Packet;
     import library.circulate.clients.Client;
     import library.circulate.commands.ChatMessage;
-    import library.circulate.commands.ConnectNetwork;
-    import library.circulate.commands.JoinNode;
-    import library.circulate.commands.SystemMessage;
     import library.circulate.events.NetworkEvent;
     import library.circulate.nodes.ChatNode;
     import library.circulate.nodes.CommandCenter;
-    import library.circulate.nodes.OneFileNode;
-    import library.circulate.nodes.SwarmNode;
+    import library.circulate.utils.Time;
     import library.circulate.utils.getLocalUserName;
     import library.circulate.utils.traceConnectivityResults;
     import library.circulate.utils.traceNetworkInterfaces;
@@ -83,7 +74,7 @@ package library.circulate.networks
     * 
     * note:
     * for now we are managing only 1 network which can be of different types
-    * local, test server, adobe server 
+    * local, test server, internet server (can be adobe cirrus server or other) 
     */
     public class Network extends EventDispatcher implements NetworkSystem
     {
@@ -106,6 +97,18 @@ package library.circulate.networks
                 config.IPMulticastAddress    = "224.0.0.255:30000";
                 config.maxPeerConnections    = 32;
                 config.connectionTimeout     = 0; //0 means no timeout
+                
+                //fast
+                config.announceTime          =  3 * Time.oneSecond; //  3sec
+                config.expireTime            =  3 * Time.oneSecond; //  3sec
+                config.expireTimeOut         = 10 * Time.oneSecond; // 10sec
+                config.idleTime              =  3 * Time.oneSecond; //  3sec
+                
+                //slow
+//                config.announceTime          =  2 * Time.oneMinute; // 2mn
+//                config.expireTime            =  1 * Time.oneMinute; // 1mn
+//                config.expireTimeOut         =  5 * Time.oneMinute; // 5mn
+//                config.idleTime              =  3 * Time.oneMinute; // 3mn
             
             return config;
         }
@@ -918,6 +921,11 @@ package library.circulate.networks
                 _log( "commandCenter = " + _commandCenter );
             }
             
+        }
+        
+        public function findNode( name:String ):NetworkNode
+        {
+            return _findNode( name );
         }
         
         public function resetTimeout():void

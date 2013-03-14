@@ -102,5 +102,29 @@ package library.circulate
         /** @private */
         public function set connectionTimeout( value:uint ):void { _config.connectionTimeout = value; }
         
+        
+        
+        // timers
+        
+        /** The default username. */
+        public function get announceTime():uint { return _config.announceTime; }
+        /** @private */
+        public function set announceTime( value:uint ):void { _config.announceTime = value; }
+        
+        /** The default username. */
+        public function get expireTime():uint { return _config.expireTime; }
+        /** @private */
+        public function set expireTime( value:uint ):void { _config.expireTime = value; }
+        
+        /** The default username. */
+        public function get expireTimeOut():uint { return _config.expireTimeOut; }
+        /** @private */
+        public function set expireTimeOut( value:uint ):void { _config.expireTimeOut = value; }
+        
+        /** The default username. */
+        public function get idleTime():uint { return _config.idleTime; }
+        /** @private */
+        public function set idleTime( value:uint ):void { _config.idleTime = value; }
+        
     }
 }

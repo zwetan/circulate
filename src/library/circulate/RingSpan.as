@@ -1,5 +1,7 @@
 package library.circulate
 {
+    import core.maths.radiansToDegrees;
+
     public class RingSpan
     {
         public static const span_0_1:String = "0_1";
@@ -18,8 +20,75 @@ package library.circulate
         public static const span_D_E:String = "D_E";
         public static const span_E_F:String = "E_F";
         
-        public static function getAngle( ringspan:String ):uint
+        private static var _MPI:Number = Math.PI/180;
+        
+        //return the starting angle as radian
+        public static function getStartAngle( startAt:uint = 270 ):Number
         {
+            var startRadians:Number = startAt * _MPI;
+            
+            return startRadians;
+        }
+        
+        //return the incremented angle as radian
+        //based on the total number of spans over the max arc (eg. full circle is 360)
+        public static function getIncrementAngle( arc:Number = 360,
+                                                  totalSpans:uint = 15 ):Number
+        {
+            var incrementAngle:Number = arc/totalSpans;
+            var incrementRadians:Number = incrementAngle * _MPI;
+            
+            return incrementRadians;
+        }
+        
+        //return the incremented angle as radian at a particular position on the ring
+        public static function getIncrementAngleAt( ringPosition:uint = 0, spanPosition:int = 0,
+                                                    arc:Number = 360, totalSpans:uint = 15,
+                                                    startAt:uint = 270 ):Number
+        {
+            var startRadians:Number     = getStartAngle( startAt );
+            var incrementRadians:Number = getIncrementAngle( arc, totalSpans );
+            var halfRadians:Number      = incrementRadians/2;
+            
+            var i:uint;
+            for( i=0 ; i<ringPosition; i++ )
+            {
+                startRadians += incrementRadians;
+            }
+            
+            var result:Number;
+            if( spanPosition < 0 )
+            {
+                result = startRadians - (halfRadians*2);
+            }
+            else if( spanPosition == 0 )
+            {
+                result = startRadians - halfRadians;
+            }
+            else if( spanPosition > 0 )
+            {
+                result = startRadians;
+            }
+            
+            return result;
+        }
+        
+        
+        //return the angle position of the span as radian
+        public static function getAngle( ringspan:String, position:int = 0 ):Number
+        {
+            /* note:
+               positioncan be either
+                 -1 : align on the left of the span
+                  0 : align on the center of the span
+                  1 : align on the rightof the span
+               
+               eg. if your span is 5_6
+               -1 is the position on the 5
+                0 is the position between 5 and 6
+                1 is the position on the 6 
+            */
+            
             var ratio:uint = 0;
             
             switch( ringspan )
@@ -85,7 +154,7 @@ package library.circulate
                 break;
             }
             
-            return (ratio) * ((360/15)/2);
+            return getIncrementAngleAt( ratio, position );
         }
         
         public function RingSpan()

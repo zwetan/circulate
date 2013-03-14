@@ -1,5 +1,6 @@
 package library.circulate
 {
+    import flash.geom.Point;
 
     public class AutomaticDistributedElection
     {
@@ -46,9 +47,9 @@ package library.circulate
 				  || isInRingSpan( RingPosition.addressA, rangeFrom, rangeTo) );
         }
         
-        public static function getRingSpanCorrectionAngle( address:String ):int
+        public static function getRingSpanCorrectionAngle( address:String, index:uint = 1 ):int
         {
-            var hex:String = address.charAt( 0 );
+            var hex:String = address.charAt( index );
             
             var cangle:int = 0;
             
@@ -122,6 +123,13 @@ package library.circulate
             return cangle;
         }
         
+        //return the ringspan of an address
+        /* note:
+           for ex:
+           address is a44e...
+           ringspan would be then "A_B"
+           eg. address is on the span between ring postion AAAA... and BBBB...
+        */
         public static function getRingSpan( address:String ):String
         {
             if( isInRingSpan( address, RingPosition.address0, RingPosition.address1 ) )
@@ -185,7 +193,32 @@ package library.circulate
                 return RingSpan.span_E_F;
             }
 
-            return RingSpan.span_0_1;
+            return RingSpan.span_0_1; //by default if not found
+        }
+        
+        //return the x/y position of an address on a circle
+        //distance is the distance from the center of the circle
+        //position is the alignement on the span, -1 lef, 0 center, 1 right
+        public static function getCirclePosition( address:String, distance:uint = 0, position:int = 0,
+                                                  correctAngle:Boolean = false, correctDistance:Boolean = false ):Point
+        {
+            var ringspan:String = AutomaticDistributedElection.getRingSpan( address );
+            var spanAsAngle:Number = RingSpan.getAngle( ringspan, position ); //radian
+            
+            if( correctAngle )
+            {
+                var cangle:int = getRingSpanCorrectionAngle( address, 1 );
+                spanAsAngle += cangle;
+            }
+            
+            if( correctDistance )
+            {
+                var cdistance:int = getRingSpanCorrectionAngle( address, 2 );
+                distance += cdistance * 2;
+            }
+            
+            var p:Point = Point.polar( distance, spanAsAngle );
+            return p;
         }
         
         public function AutomaticDistributedElection()

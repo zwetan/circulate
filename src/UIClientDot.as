@@ -16,17 +16,21 @@ package
     public class UIClientDot extends Sprite
     {
         private var _client:NetworkClient;
+        private var _container:DisplayObject;
         
         public var bgarea:Sprite;
         public var bgcircle:Sprite;
         public var circleborder:Sprite;
         public var dotname:TextField;
+        
+        public var centerPoint:Sprite;
     
-        public function UIClientDot( client:NetworkClient )
+        public function UIClientDot( client:NetworkClient, container:DisplayObject )
         {
             super();
             
             _client = client;
+            _container = container;
             
             if( stage )
             {
@@ -52,8 +56,13 @@ package
 //            dotname.x = (bgarea.x + bgarea.width)/2 - dotname.width;
 //            dotname.y = (bgarea.y + bgarea.height)/2 - dotname.height;
               
-              dotname.x = bgarea.width/2 - dotname.width/2;
-              dotname.y = bgarea.height/2 - dotname.height/2;
+              //dotname.x = bgarea.width/2 - dotname.width/2;
+              //dotname.y = bgarea.height/2 - dotname.height/2;
+              
+//              dotname.x = bgarea.x + bgarea.width + 2;
+//              dotname.y = bgarea.height/2 - dotname.height/2;
+
+            //alignOnRing( _container );
         }
         
         private function _draw():void
@@ -62,21 +71,21 @@ package
             
             bgarea = new Sprite();
             bgarea.graphics.clear();
-            bgarea.graphics.beginFill( 0x000000, 0.0 );
-            bgarea.graphics.drawRect( 0, 0, 40, 40 );
+            bgarea.graphics.beginFill( 0x000000, 0.4 );
+            bgarea.graphics.drawRect( -10, -10, 20, 20 );
             bgarea.graphics.endFill();
             
             circleborder = new Sprite();
             circleborder.graphics.clear();
             circleborder.graphics.lineStyle( 4, 0xffffff );
-            circleborder.graphics.drawCircle( 20, 20, 20 );
+            circleborder.graphics.drawCircle( 0, 0, 10 );
             circleborder.graphics.endFill();
             
             bgcircle = new Sprite();
             bgcircle.graphics.clear();
             bgcircle.graphics.beginFill( rndcolor, 1.0 );
-            bgcircle.graphics.drawCircle( 20, 20, 20 );
-            bgcircle.graphics.drawCircle( 20, 20, 10 );
+            bgcircle.graphics.drawCircle( 0, 0, 10 );
+            //bgcircle.graphics.drawCircle( 20, 20, 10 );
             bgcircle.graphics.endFill();
             
             dotname = new TextField();
@@ -86,13 +95,31 @@ package
             dotname.selectable = false;
             dotname.autoSize = TextFieldAutoSize.CENTER;
             dotname.defaultTextFormat = new TextFormat( "Arial", 8, 0x000000, true );
-            dotname.text = _client.username;
             
-            addChild( bgarea );
+            centerPoint = new Sprite();
+            centerPoint.graphics.clear();
+            centerPoint.graphics.beginFill( 0xffcc00, 1.0 );
+            centerPoint.graphics.drawRect( -2, -2, 4, 4 );
+            centerPoint.graphics.endFill();
+            
+            if( _client && (_client.username != "") )
+            {
+                dotname.text = _client.username;
+            }
+            else
+            {
+                dotname.text = "unknown";
+            }
+            
+            _colorize( circleborder, 0x000000 );
+            
+            //addChild( bgarea );
             addChild( circleborder );
             addChild( bgcircle );
             
-            addChild( dotname );
+            //addChild( dotname );
+            
+            addChild( centerPoint );
         }
         
         public function main():void
@@ -104,7 +131,6 @@ package
             
             //events
             stage.addEventListener( Event.RESIZE, onResize );
-            circleborder.visible = false;
             
             //action
             onResize();
@@ -115,9 +141,11 @@ package
         
         private function _randomColor():uint
         {
-            var R:uint = _randomRange( 0, 255 );
+            //var R:uint = _randomRange( 0, 255 );
+            var R:uint = 128;
             var G:uint = _randomRange( 0, 255 );
-            var B:uint = _randomRange( 0, 255 );
+            //var B:uint = _randomRange( 0, 255 );
+            var B:uint = 255;
             
             return (R << 16) | (G << 8) | B;
         }
@@ -139,19 +167,36 @@ package
         {
             _client = client;
             dotname.text = _client.username;
-            circleborder.visible = _client.elected;
+            
+            if( _client.elected )
+            {
+                _colorize( circleborder, 0xffffff );
+            }
+            else
+            {
+                _colorize( circleborder, 0x000000 );
+            }
+            
         }
         
-        public function alignOnRing( target:DisplayObject, ringspan:String ):void
+        public function alignOnRing():void
         {
-            var spanAsAngle:uint = 135 + RingSpan.getAngle( ringspan );
-            var cangle:int = AutomaticDistributedElection.getRingSpanCorrectionAngle( ringspan );
-            spanAsAngle += cangle * 10;
-            var distance:Number = 100;
-            var angle:Number = (2 * Math.PI) * (spanAsAngle / 180);
-            var translatePoint:Point = Point.polar( distance, angle );
-            this.x = translatePoint.x + (target.x + (target.width/2)) - (this.width/2);
-            this.y = translatePoint.y + (target.y + (target.height/2)) - (this.height/2);
+            var address:String = _client.peerID;
+            var distance:uint  = 120; //from center of ring
+            var position:int   = 0; //align center of span
+            var correctAngle:Boolean = true; //to slightly alterate the pos of the circle so for the same address span the 2 circle does not cover each other
+            var correctDistance:Boolean = true;
+            var translatePoint:Point = AutomaticDistributedElection.getCirclePosition( address, distance, position, correctAngle, correctDistance );
+            this.x = translatePoint.x;
+            this.y = translatePoint.y;            
+        }
+        
+        
+        public function removeSelf():void
+        {
+            _client = null;
+            _container = null;
+            
         }
         
     }

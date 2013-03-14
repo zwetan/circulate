@@ -791,9 +791,9 @@ package library.circulate.nodes
             
             if( isFullMesh )
             {
-                //var result:String = sendToAllNeighbors( command );
+                var result:String = sendToAllNeighbors( command );
                 //var result:String = sendToNearest( command, _groupAddress );
-                var result:String = sendToNeighbor( command, NetGroupSendMode.NEXT_DECREASING );
+                //var result:String = sendToNeighbor( command, NetGroupSendMode.NEXT_DECREASING );
                 onMessageRouted( result );
             }
             else

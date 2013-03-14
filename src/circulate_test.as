@@ -55,12 +55,44 @@ package
     import library.circulate.commands.ClientList;
     import library.circulate.commands.RequestInformation;
     import library.circulate.events.ClientEvent;
+    import library.circulate.events.NeighborEvent;
     import library.circulate.events.NetworkEvent;
     import library.circulate.networks.LocalAreaNetwork;
     import library.circulate.networks.Network;
     import library.circulate.nodes.Node;
     import library.circulate.utils.getLocalUserName;
     import library.circulate.utils.traceNetworkInterfaces;
+
+/*
+ArgumentError: Error #2025: The supplied DisplayObject must be a child of the caller.
+	at flash.display::DisplayObjectContainer/removeChild()
+	at circulate_test/onClientDisconnect()[/work/buRRRn/circulate/src/circulate_test.as:465]
+	at flash.events::EventDispatcher/dispatchEventFunction()
+	at flash.events::EventDispatcher/dispatchEvent()
+	at library.circulate.nodes::CommandCenter/onNeighborDisconnect()[/work/buRRRn/circulate/src/library/circulate/nodes/CommandCenter.as:72]
+	at flash.events::EventDispatcher/dispatchEventFunction()
+	at flash.events::EventDispatcher/dispatchEvent()
+	at library.circulate.nodes::Node/onNeighborDisconnect()[/work/buRRRn/circulate/src/library/circulate/nodes/Node.as:179]
+	at library.circulate.nodes::Node/onNetStatus()[/work/buRRRn/circulate/src/library/circulate/nodes/Node.as:110]
+
+
+ArgumentError: Error #2025: The supplied DisplayObject must be a child of the caller.
+	at flash.display::DisplayObjectContainer/removeChild()
+	at circulate_test/_removeAllClientDot()[/work/buRRRn/circulate/src/circulate_test.as:414]
+	at circulate_test/onNetworkDisconnect()[/work/buRRRn/circulate/src/circulate_test.as:331]
+	at flash.events::EventDispatcher/dispatchEventFunction()
+	at flash.events::EventDispatcher/dispatchEvent()
+	at library.circulate.networks::Network/onDisconnect()[/work/buRRRn/circulate/src/library/circulate/networks/Network.as:361]
+	at library.circulate.networks::Network/onNetStatus()[/work/buRRRn/circulate/src/library/circulate/networks/Network.as:263]
+	at flash.net::NetConnection/invoke()
+	at flash.net::NetConnection/close()
+	at library.circulate.networks::Network/disconnect()[/work/buRRRn/circulate/src/library/circulate/networks/Network.as:753]
+	at circulate_test/interpret()[/work/buRRRn/circulate/src/circulate_test.as:163]
+	at circulate_test/_interpret()[/work/buRRRn/circulate/src/circulate_test.as:129]
+	at circulate_ui/onKeyDown()[/work/buRRRn/circulate/src/circulate_ui.as:131]
+
+
+*/
 
     [ExcludeClass]
     [SWF(width="800", height="400", frameRate="24", backgroundColor="#ffcc00")]
@@ -122,41 +154,88 @@ package
         
         public function interpret( command:String, line:String ):void
         {
-            var username:String = localAreaNetwork.client.username;
-            var netcmd:NetworkCommand;
-            var sendcmd:Boolean = true;
+            var netsys:NetworkSystem = localAreaNetwork; //choose network here
+            
+            //user info
+            var username:String = netsys.client.username;
+            var peerID:String   = netsys.client.peerID;
+            
+            var netcmd:NetworkCommand = null;
+            var netnode:NetworkNode   = null;
+            var sendcmd:Boolean       = true;
+            
+            var nodename:String;
+            var lines:Array;
             
             switch( command )
             {
+                //example: \start
                 case "start":
-                localAreaNetwork.connect();
+                netsys.connect();
                 sendcmd = false;
                 break;
                 
+                //example: \stop
                 case "stop":
-                localAreaNetwork.disconnect();
+                netsys.disconnect();
                 sendcmd = false;
                 break;
                 
+                //example: \test
                 case "test":
                 writeline( "## user [" + username + "] is testing \"" + line + "\"" );
                 sendcmd = false;
                 break;
                 
+                //example: \node name
                 case "node":
-                localAreaNetwork.createNode( line );
+                lines    = line.split( " " );
+                nodename = lines.shift();
+                line     = lines.join( " " );
+                
+                netsys.createNode( nodename );
                 break;
                 
-                case "nodechat":
-                var nodename:String;
-                var lines:Array = line.split( " " );
+                //example: \nodeleave name
+                case "nodeleave":
+                lines    = line.split( " " );
                 nodename = lines.shift();
-                line = lines.join( " " );
-                netcmd = new ChatMessage( line, localAreaNetwork.client.peerID, nodename );
+                line     = lines.join( " " );
+                
+                netsys.leaveNode( nodename );
+                break;
+                
+                //example: \nodejoin name
+                case "nodejoin":
+                lines    = line.split( " " );
+                nodename = lines.shift();
+                line     = lines.join( " " );
+                
+                if( nodename != "" )
+                {
+                    netsys.joinNode( nodename );
+                }
+                else
+                {
+                    writeline( "# can't joine node, you need to provide a name." );
+                }
+                break;
+                
+                //example: \nodechat test hello world
+                case "nodechat":
+                lines    = line.split( " " );
+                nodename = lines.shift();
+                line     = lines.join( " " );
+                
+                netcmd  = new ChatMessage( line, peerID, nodename );
+                netnode = netsys.findNode( nodename );
+                sendcmd = true;
                 break;
                 
                 case "chat":
-                netcmd = new ChatMessage( line, localAreaNetwork.client.peerID );
+                netcmd  = new ChatMessage( line, peerID );
+                netnode = netsys.commandCenter;
+                sendcmd = true;
                 break;
                 
                 case "clear":
@@ -170,7 +249,7 @@ package
             
             if( sendcmd && netcmd)
             {
-                localAreaNetwork.sendCommandToNode( netcmd );
+                netsys.sendCommandToNode( netcmd, netnode );
             }
             
         }
@@ -233,87 +312,24 @@ package
             var cmd:ClientList = new ClientList();
         }
         
+        public var commandcenter:UICommandCenter;
+        
         private var _loopcount:uint = 0;
         private var _loopmax:uint   = 10;
         
+        private var _indexDot:uint = 0;
         private var _UIdots:Dictionary = new Dictionary();
         
-//        private function onLoop( event:Event = null ):void
+//        public function removeClientCircle( client:NetworkClient ):void
 //        {
-//            clearBackground();
-//            
-//            if( _loopcount >= _loopmax )
-//            {
-//                _loopcount = 0;
-//            }
-//            
-//            _loopcount++;
-//            
-//            var i:uint;
-//            var j:uint;
-//            var k:uint;
-//            var node:NetworkNode;
-//            var client:NetworkClient;
-//            var post:String = "";
-//            var elect:String = "(elected) ";
-//            var ringspan:String;
-//            
-//            writelineToBackground( "nodes:" );
-//            writelineToBackground( "------" );
-//            for( i=0; i<localAreaNetwork.nodes.length; i++ )
-//            {
-//                node = localAreaNetwork.nodes[i];
-//                Node(node).onRemoveClientHook = removeClientCircle;
-//                writelineToBackground( (node.isElected ? elect: "") + node.name );
-//                writelineToBackground( node.group.neighborCount  + " :neighbours _| " );
-//                writelineToBackground( node.estimatedMemberCount + "    :members _| " );
-//                writelineToBackground( node.clients.length       + "    :clients _| " );
-//                for( j=0; j<node.clients.length; j++ )
-//                {
-//                    client = node.clients[ j ];
-//                    if( client == localAreaNetwork.client )
-//                    {
-//                        post = "(me) ";
-//                    }
-//                    else
-//                    {
-//                        post = "";
-//                    }
-//                    
-//                    ringspan = AutomaticDistributedElection.getRingSpan( client.peerID );
-//                    writelineToBackground( post + "["+j+"]: " + client.username + "[" + ringspan + "]" + (client.elected ? "(E)": "") );
-//                    if( !_UIdots[client.peerID] )
-//                    {
-//                        _UIdots[ client.peerID ] = new UIClientDot( client );
-//                        addChild( _UIdots[ client.peerID ] );
-//                    }
-//                    _UIdots[ client.peerID ].alignOnRing( area, ringspan );
-//                    _UIdots[ client.peerID ].update( client );
-//                    
-//                    
-//                    if( (client.username == "") && (_loopcount == _loopmax) )
-//                    {
-//                        var request:NetworkCommand = new RequestInformation( localAreaNetwork.client.peerID );
-//                        node.sendTo( client.peerID, request );
-//                    }
-//                    
-//                }
-//                
-//            }
-//            
-//            writelineToBackground( "" );
-//            
+//            var peerID:String = client.peerID;
+//            removeChild( _UIdots[ peerID ] );
 //        }
-        
-        public function removeClientCircle( client:NetworkClient ):void
-        {
-            var peerID:String = client.peerID;
-            removeChild( _UIdots[ peerID ] );
-        }
         
         public function onNetworkConnect( event:NetworkEvent ):void
         {
-            trace( "test connected" );
+            writeline( "onNetworkConnect()" );
+            
             updateUsername( localAreaNetwork.client.username );
             updatePeerID( localAreaNetwork.client.peerID );
             updateConnection( 0x00ff00 );
@@ -325,67 +341,84 @@ package
         
         public function onNetworkDisconnect( event:NetworkEvent ):void
         {
-            trace( "test disconnected" );
+            writeline( "onNetworkDisconnect()" );
+            
             updateConnection( 0xff0000 );
             //removeEventListener( Event.ENTER_FRAME, onLoop );
             clearBackground();
+            
+            commandcenter.removeAllClientDot();
+            
+            if( contains( commandcenter ) )
+            {
+                removeChild( commandcenter );
+            }
+            
         }
-        
-        public var commandcenter:UICommandCenter;
         
         public function onNetworkCommandCenterReady( event:NetworkEvent ):void
         {
-            commandcenter = new UICommandCenter();
-            addChild( commandcenter );
+            writeline( "onNetworkCommandCenterReady()" );
+            
+            if( !commandcenter )
+            {
+                commandcenter = new UICommandCenter();
+            }
+            
+            if( !contains( commandcenter ) )
+            {
+                addChild( commandcenter );
+            }
+            
             
             localAreaNetwork.commandCenter.addEventListener( ClientEvent.CONNECTED, onClientConnect );
             localAreaNetwork.commandCenter.addEventListener( ClientEvent.ADDED, onClientConnect );
             localAreaNetwork.commandCenter.addEventListener( ClientEvent.REMOVED, onClientDisconnect );
             localAreaNetwork.commandCenter.addEventListener( ClientEvent.UPDATED, onClientUpdate );
+            localAreaNetwork.commandCenter.addEventListener( NeighborEvent.CONNECT, onNeighborConnect );
+            localAreaNetwork.commandCenter.addEventListener( NeighborEvent.DISCONNECT, onNeighborDisconnect );
+            
+            trace( "my client: " + localAreaNetwork.client.peerID );
         }
         
-        public function addClientDot( clientdot:UIClientDot ):void
+        private function onNeighborConnect( event:NeighborEvent ):void
         {
-            addChild( clientdot );
-            var client:NetworkClient = clientdot.client;
-            var ringspan:String = AutomaticDistributedElection.getRingSpan( client.peerID );
+            writeline( "onNeighborConnect()" );
             
-            //clientdot.alignOnRing( this, ringspan );
-            clientdot.alignOnRing( commandcenter, ringspan );
+            var client:NetworkClient = event.client;
+            commandcenter.addClientDot( client.peerID, client );
+        }
+        
+        private function onNeighborDisconnect( event:NeighborEvent ):void
+        {
+            writeline( "onNeighborDisconnect()" );
+            
+            var client:NetworkClient = event.client;
+            commandcenter.removeClientDot( client.peerID );
         }
         
         private function onClientConnect( event:ClientEvent ):void
         {
+            writeline( "onClientConnect()" );
+            
             var client:NetworkClient = event.client;
-            var node:NetworkNode = event.target as NetworkNode;
-            trace( "node = " + node );
-            trace( "client = " + client );
-            if( client )
-            {
-                _UIdots[ client.peerID ] = new UIClientDot( client );
-                addClientDot( _UIdots[ client.peerID ] );
-                
-            }
+            commandcenter.addClientDot( client.peerID, client );
         }
         
         private function onClientDisconnect( event:ClientEvent ):void
         {
-            var client:NetworkClient = event.client;
+            writeline( "onClientDisconnect()" );
             
-            if( client )
-            {
-                removeChild( _UIdots[ client.peerID ] );
-            }
+            var client:NetworkClient = event.client;
+            commandcenter.removeClientDot( client.peerID );
         }
         
         private function onClientUpdate( event:ClientEvent ):void
         {
-            var client:NetworkClient = event.client;
+            writeline( "onClientUpdate()" );
             
-            if( client )
-            {
-                _UIdots[ client.peerID ].update( client );
-            }
+            var client:NetworkClient = event.client;
+            commandcenter.updateClientDot( client.peerID, client );
         }
         
         public function sendCustomCommand():void

@@ -35,6 +35,8 @@ package library.circulate
         function leaveNode( name:String ):void;
         
         function sendCommandToNode( command:NetworkCommand, node:NetworkNode = null ):void;
+        function findNode( name:String ):NetworkNode;
+        
         //function resetTimeout():void;
     }
 }

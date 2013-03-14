@@ -2,6 +2,7 @@ package library.circulate.nodes
 {
     import flash.net.GroupSpecifier;
     import flash.net.NetGroupReceiveMode;
+    import flash.utils.Timer;
     
     import library.circulate.NetworkClient;
     import library.circulate.NetworkCommand;
@@ -15,6 +16,7 @@ package library.circulate.nodes
     
     public class CommandCenter extends Node
     {
+        private var _keepAlive:Timer;
         
         public function CommandCenter( network:Network, name:String = "" )
         {
@@ -25,6 +27,8 @@ package library.circulate.nodes
             super( network, name, specifier );
             //super( network, name );
             _type = NodeType.command;
+            
+            _ctor();
         }
         
         private function _ctor():void
@@ -32,7 +36,7 @@ package library.circulate.nodes
             addEventListener( NeighborEvent.CONNECT, onNeighborConnect );
             addEventListener( NeighborEvent.DISCONNECT, onNeighborDisconnect );
             
-            addEventListener( ClientEvent.UPDATED, onClientUpdate );
+            //addEventListener( ClientEvent.UPDATED, onClientUpdate );
         }
         
         private function onNeighborConnect( event:NeighborEvent ):void
