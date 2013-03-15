@@ -41,16 +41,19 @@ package
     import flash.display.Sprite;
     import flash.events.Event;
     import flash.geom.ColorTransform;
+    import flash.media.Camera;
+    import flash.media.Video;
     import flash.utils.Dictionary;
     import flash.utils.setTimeout;
     
-    import library.circulate.AutomaticDistributedElection;
+    import library.circulate.RingTopology;
     import library.circulate.NetworkClient;
     import library.circulate.NetworkCommand;
     import library.circulate.NetworkConfiguration;
     import library.circulate.NetworkNode;
     import library.circulate.NetworkSystem;
     import library.circulate.NetworkType;
+    import library.circulate.NodeType;
     import library.circulate.commands.ChatMessage;
     import library.circulate.commands.ClientList;
     import library.circulate.commands.RequestInformation;
@@ -63,37 +66,6 @@ package
     import library.circulate.utils.getLocalUserName;
     import library.circulate.utils.traceNetworkInterfaces;
 
-/*
-ArgumentError: Error #2025: The supplied DisplayObject must be a child of the caller.
-	at flash.display::DisplayObjectContainer/removeChild()
-	at circulate_test/onClientDisconnect()[/work/buRRRn/circulate/src/circulate_test.as:465]
-	at flash.events::EventDispatcher/dispatchEventFunction()
-	at flash.events::EventDispatcher/dispatchEvent()
-	at library.circulate.nodes::CommandCenter/onNeighborDisconnect()[/work/buRRRn/circulate/src/library/circulate/nodes/CommandCenter.as:72]
-	at flash.events::EventDispatcher/dispatchEventFunction()
-	at flash.events::EventDispatcher/dispatchEvent()
-	at library.circulate.nodes::Node/onNeighborDisconnect()[/work/buRRRn/circulate/src/library/circulate/nodes/Node.as:179]
-	at library.circulate.nodes::Node/onNetStatus()[/work/buRRRn/circulate/src/library/circulate/nodes/Node.as:110]
-
-
-ArgumentError: Error #2025: The supplied DisplayObject must be a child of the caller.
-	at flash.display::DisplayObjectContainer/removeChild()
-	at circulate_test/_removeAllClientDot()[/work/buRRRn/circulate/src/circulate_test.as:414]
-	at circulate_test/onNetworkDisconnect()[/work/buRRRn/circulate/src/circulate_test.as:331]
-	at flash.events::EventDispatcher/dispatchEventFunction()
-	at flash.events::EventDispatcher/dispatchEvent()
-	at library.circulate.networks::Network/onDisconnect()[/work/buRRRn/circulate/src/library/circulate/networks/Network.as:361]
-	at library.circulate.networks::Network/onNetStatus()[/work/buRRRn/circulate/src/library/circulate/networks/Network.as:263]
-	at flash.net::NetConnection/invoke()
-	at flash.net::NetConnection/close()
-	at library.circulate.networks::Network/disconnect()[/work/buRRRn/circulate/src/library/circulate/networks/Network.as:753]
-	at circulate_test/interpret()[/work/buRRRn/circulate/src/circulate_test.as:163]
-	at circulate_test/_interpret()[/work/buRRRn/circulate/src/circulate_test.as:129]
-	at circulate_ui/onKeyDown()[/work/buRRRn/circulate/src/circulate_ui.as:131]
-
-
-*/
-
     [ExcludeClass]
     [SWF(width="800", height="400", frameRate="24", backgroundColor="#ffcc00")]
     public class circulate_test extends circulate_ui
@@ -102,6 +74,8 @@ ArgumentError: Error #2025: The supplied DisplayObject must be a child of the ca
         
         public var config:NetworkConfiguration;
         public var localAreaNetwork:NetworkSystem;
+        
+        public var videotile:Video;
         
         public function circulate_test()
         {
@@ -181,10 +155,61 @@ ArgumentError: Error #2025: The supplied DisplayObject must be a child of the ca
                 sendcmd = false;
                 break;
                 
+                //example: \destroy
+                case "destroy":
+                netsys.destroy();
+                sendcmd = false;
+                break;
+                
                 //example: \test
                 case "test":
                 writeline( "## user [" + username + "] is testing \"" + line + "\"" );
                 sendcmd = false;
+                break;
+                
+                //example: \publish
+                case "publish":
+                videotile = new Video();
+                addChild( videotile );
+                netnode = netsys.createNode( "mycamera", NodeType.stream );
+                
+                var cam:Camera = Camera.getCamera();
+                    cam.setQuality( 0, 100 );
+	            videotile.attachCamera( cam );
+	            netnode.stream.attachCamera( cam );
+                
+                netnode.stream.videoReliable = true;
+                netnode.stream.multicastAvailabilitySendToAll = true;
+                netnode.stream.multicastAvailabilityUpdatePeriod = 0;
+                netnode.stream.multicastFetchPeriod = 0;
+                netnode.stream.multicastPushNeighborLimit = 16;
+                netnode.stream.multicastRelayMarginDuration = 10;
+                netnode.stream.multicastWindowDuration = 10;
+	            
+                if( netnode.stream.videoStreamSettings )
+                {
+                    netnode.stream.videoStreamSettings.setQuality( 0, 100 );
+                }
+                
+	            netnode.stream.publish( "multicast" );
+                break;
+                
+                //example: \subscribe
+                case "subscribe":
+                videotile = new Video();
+                addChild( videotile );
+                netnode = netsys.createNode( "mycamera", NodeType.stream );
+                
+                netnode.stream.videoReliable = true;
+                netnode.stream.multicastAvailabilitySendToAll = true;
+                netnode.stream.multicastAvailabilityUpdatePeriod = 0;
+                netnode.stream.multicastFetchPeriod = 0;
+                netnode.stream.multicastPushNeighborLimit = 16;
+                netnode.stream.multicastRelayMarginDuration = 10;
+                netnode.stream.multicastWindowDuration = 10;
+                
+	            videotile.attachNetStream( netnode.stream );
+                netnode.stream.play( "multicast" );
                 break;
                 
                 //example: \node name
@@ -326,6 +351,33 @@ ArgumentError: Error #2025: The supplied DisplayObject must be a child of the ca
 //            removeChild( _UIdots[ peerID ] );
 //        }
         
+        private function onLoop( event:Event = null ):void
+        {
+            var netsys:NetworkSystem = localAreaNetwork;
+            var node:NetworkNode;
+            var client:NetworkClient;
+            
+            var i:uint;
+            var j:uint;
+            
+            clearBackground();
+            writelineToBackground( "estimatedTotalMember = " + netsys.estimatedTotalMember );
+            writelineToBackground( "    knownTotalMember = " + netsys.knownTotalMember );
+            
+            for( i=0; i<netsys.nodes.length; i++ )
+            {
+                node = netsys.nodes[ i ];
+                writelineToBackground( node.name + "    " );
+                
+                for( j=0; j<node.clients.length; j++ )
+                {
+                    client = node.clients[ j ];
+                    writelineToBackground( " |__[" + j + "] : " + client.username );
+                }
+                
+            }
+        }
+        
         public function onNetworkConnect( event:NetworkEvent ):void
         {
             writeline( "onNetworkConnect()" );
@@ -379,6 +431,7 @@ ArgumentError: Error #2025: The supplied DisplayObject must be a child of the ca
             localAreaNetwork.commandCenter.addEventListener( NeighborEvent.DISCONNECT, onNeighborDisconnect );
             
             trace( "my client: " + localAreaNetwork.client.peerID );
+            onLoop();
         }
         
         private function onNeighborConnect( event:NeighborEvent ):void
@@ -387,6 +440,7 @@ ArgumentError: Error #2025: The supplied DisplayObject must be a child of the ca
             
             var client:NetworkClient = event.client;
             commandcenter.addClientDot( client.peerID, client );
+            onLoop();
         }
         
         private function onNeighborDisconnect( event:NeighborEvent ):void
@@ -395,6 +449,7 @@ ArgumentError: Error #2025: The supplied DisplayObject must be a child of the ca
             
             var client:NetworkClient = event.client;
             commandcenter.removeClientDot( client.peerID );
+            onLoop();
         }
         
         private function onClientConnect( event:ClientEvent ):void
