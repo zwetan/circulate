@@ -29,14 +29,16 @@ package library.circulate
         function connect( server:String = "", key:String = "" ):void;
         function disconnect():void;
         
-        function createNode( name:String, type:NodeType = null ):void;
+        function createNode( name:String, type:NodeType = null ):NetworkNode;
         function hasNode( name:String ):Boolean;
-        function joinNode( name:String ):void;
-        function leaveNode( name:String ):void;
+        function joinNode( name:String ):NetworkNode;
+        function leaveNode( name:String ):NetworkNode;
         
         function sendCommandToNode( command:NetworkCommand, node:NetworkNode = null ):void;
         function findNode( name:String ):NetworkNode;
         
         //function resetTimeout():void;
+        
+        function destroy():void;
     }
 }

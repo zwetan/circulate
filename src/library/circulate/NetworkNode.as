@@ -38,7 +38,7 @@ package library.circulate
     import flash.events.IEventDispatcher;
     import flash.net.GroupSpecifier;
     import flash.net.NetGroup;
-    import flash.utils.Dictionary;
+    import flash.net.NetStream;
 
     /**
      * 
@@ -49,10 +49,12 @@ package library.circulate
         function get name():String;
         function get specificier():GroupSpecifier;
         function get group():NetGroup;
+        function get stream():NetStream;
         function get joined():Boolean;
         function get isElected():Boolean;
         function get isFullMesh():Boolean;
         function get groupAddress():String;
+        function get streamAddress():String;
         
         function get clients():Vector.<NetworkClient>;
         function get estimatedMemberCount():uint;
@@ -73,5 +75,7 @@ package library.circulate
         function sendTo( peerID:String, command:NetworkCommand ):void;
         function sendToUser( name:String, command:NetworkCommand ):void;
         function sendToGroup( address:String, command:NetworkCommand ):void;
+        
+        function destroy():void;
     }
 }
