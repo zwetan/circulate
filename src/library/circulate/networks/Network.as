@@ -57,12 +57,12 @@ package library.circulate.networks
     import library.circulate.NetworkSystem;
     import library.circulate.NetworkType;
     import library.circulate.NodeType;
-    import library.circulate.Packet;
+    import library.circulate.data.Packet;
     import library.circulate.clients.Client;
-    import library.circulate.commands.ChatMessage;
     import library.circulate.events.NetworkEvent;
     import library.circulate.nodes.ChatNode;
     import library.circulate.nodes.CommandCenter;
+    import library.circulate.nodes.StreamNode;
     import library.circulate.utils.Time;
     import library.circulate.utils.getLocalUserName;
     import library.circulate.utils.traceConnectivityResults;
@@ -162,12 +162,31 @@ package library.circulate.networks
                 return command;
             }
             
+            /* note:
+               if the packet deserialize to anything else
+               than a NetworkCommand we simply ignore it
+               
+               for compatibility reason
+               - if you want to send commands trough
+                 a command center then you follow the
+                 basic rule and you implement NetworkCommand
+               - it would probably break if we try to deserialize anything
+               
+               for security reason
+               - if we accept anything and deserialize anything
+                 someone could take over the network with a
+                 forged command/packet
+               - avoid buffer overflow / stack overflow etc.
+            */
+            
             //deserializer did not found a NetworkCommand
             return null;
         }
         
         //--- --- --- --- --- --- --- --- ---
         
+        
+        private var _nuked:Boolean = false;
         
         private var _type:NetworkType;
         private var _config:NetworkConfiguration;
@@ -233,7 +252,7 @@ package library.circulate.networks
                 
                 /* The connection attempt succeeded. */
                 case "NetConnection.Connect.Success": // event.info.motd 
-                onConnect( event.info.motd );
+                doConnect( event.info.motd );
                 break;
                 
                 
@@ -253,16 +272,6 @@ package library.circulate.networks
                 /* The connection attempt did not have permission to access the application. */
                 case "NetConnection.Connect.Rejected":
                 
-                if( _afterAnalysis )
-                {
-                    _afterAnalysis = false;
-                    _info( "closing ..." );
-                }
-                
-                reason = code.split( "." ).pop();
-                onDisconnect( reason.toLowerCase() );
-                break;
-                
                 /* Flash Media Server disconnected the client because the client was idle longer
                    than the configured value for <MaxIdleTime>.
                    On Flash Media Server, <AutoCloseIdleClients> is disabled by default.
@@ -270,14 +279,24 @@ package library.circulate.networks
                    For more information, see Close idle connections.
                 */
                 case "NetConnection.Connect.IdleTimeout":
+                
+                if( _afterAnalysis )
+                {
+                    _afterAnalysis = false;
+                    _info( "closing ..." );
+                }
+                
+                reason = code.split( "." ).pop();
+                doDisconnect( reason.toLowerCase() );
                 break;
+                
                 
                 /* Flash Player has detected a network change,
                    for example, a dropped wireless connection,
                    a successful wireless connection,or a network cable loss.
                 */
                 case "NetConnection.Connect.NetworkChange":
-                onNetworkChange();
+                doNetworkChange();
                 break;
                 
                 /* ---- NetConnection (custom) ---- */
@@ -286,7 +305,7 @@ package library.circulate.networks
                    not officially supported
                 */
                 case "NetConnection.ConnectivityCheck.Results":
-                onConnectivityCheckResults( event.info );
+                doConnectivityCheckResults( event.info );
                 break;
                 
                 /* ---- NetGroup ---- */
@@ -295,8 +314,9 @@ package library.circulate.networks
                    The info.group property indicates which NetGroup has succeeded.
                 */
                 case "NetGroup.Connect.Success": // event.info.group
-                onNodeConnect( event.info.group as NetGroup );
+                doNodeConnect( event.info.group as NetGroup );
                 break;
+                
                 
                 /* The NetGroup connection attempt failed.
                    The info.group property indicates which NetGroup failed.
@@ -307,8 +327,9 @@ package library.circulate.networks
                    The info.group property indicates which NetGroup was denied.
                 */
                 case "NetGroup.Connect.Rejected": // event.info.group
+                
                 reason = code.split( "." ).pop();
-                onNodeDisconnect( event.info.group as NetGroup, reason.toLowerCase() );
+                doNodeDisconnect( event.info.group as NetGroup, reason.toLowerCase() );
                 break;
                 
             }
@@ -328,7 +349,14 @@ package library.circulate.networks
         
         //--- netstatus actions ---
         
-        private function onConnect( motd:String = "" ):void
+        /* note:
+           By convention, to avoidto confuse those methods with event methods
+           we would name them "doSomething" (instead of "onSomething")
+           
+           We keep them private for now, but we could make them protected.
+        */
+        
+        private function doConnect( motd:String = "" ):void
         {
             _log( "Network.onConnect( " + motd + " )" );
             
@@ -350,7 +378,7 @@ package library.circulate.networks
             }
         }
         
-        private function onDisconnect( message:String = "" ):void
+        private function doDisconnect( message:String = "" ):void
         {
             _log( "Network.onDisconnect( " + message + " )" );
             
@@ -361,7 +389,7 @@ package library.circulate.networks
             dispatchEvent( new NetworkEvent( NetworkEvent.DISCONNECTED ) );
         }
         
-        private function onConnectivityCheckResults( info:Object ):void
+        private function doConnectivityCheckResults( info:Object ):void
         {
             _log( "Network.onConnectivityCheckResults( " + info + " )" );
             
@@ -369,7 +397,7 @@ package library.circulate.networks
             _afterAnalysis = true;
         }
         
-        private function onNetworkChange():void
+        private function doNetworkChange():void
         {
             _log( "Network.onNetworkChange()" );
             
@@ -377,7 +405,7 @@ package library.circulate.networks
             
         }
         
-        private function onNodeConnect( netgroup:NetGroup ):void
+        private function doNodeConnect( netgroup:NetGroup ):void
         {
             _log( "Network.onNodeConnect( " + netgroup + " )" );
             
@@ -411,7 +439,7 @@ package library.circulate.networks
             
         }
         
-        private function onNodeDisconnect( netgroup:NetGroup, message:String = "" ):void
+        private function doNodeDisconnect( netgroup:NetGroup, message:String = "" ):void
         {
             _log( "Network.onNodeDisconnect( " + netgroup + ", " + message + " )" );
             
@@ -500,12 +528,19 @@ package library.circulate.networks
             }
         }
         
-        private function _destroyCommandCenter():void
+        private function _destroyCommandCenter( nuke:Boolean = false ):void
         {
             _log( "Network._destroyCommandCenter()" );
             
-            _commandCenter.leave();
-            _commandCenter = null;
+            if( _commandCenter )
+            {
+                _commandCenter.leave();
+                if( nuke )
+                {
+                    _commandCenter.destroy();
+                }
+                _commandCenter = null;
+            }
         }
         
         private function _addNode( node:NetworkNode ):void
@@ -582,7 +617,7 @@ package library.circulate.networks
             return null;
         }
         
-        private function _leaveAlldNode():void
+        private function _leaveAlldNode( nuke:Boolean = false ):void
         {
             _log( "Network._leaveAlldNode()" );
             
@@ -595,6 +630,10 @@ package library.circulate.networks
                 if( node )
                 {
                     node.leave();
+                    if( nuke )
+                    {
+                        node.destroy();
+                    }
                 }
                 
                 _removeNode( i );
@@ -604,6 +643,11 @@ package library.circulate.networks
         }
         
         //--- public ---
+        
+        /* note:
+           what we can consider the public API
+           or the implementation of NetworkSystem
+        */
         
         public function get config():NetworkConfiguration { return _config; }
         public function set config( value:NetworkConfiguration ):void { _config = value; } //make it read-only ?
@@ -670,6 +714,12 @@ package library.circulate.networks
         {
             _log( "Network.connect( " + server + ", " + key + " )" );
             
+            if( _nuked )
+            {
+                trace( "you can not reuse this NetworkSystem, it's been destroyed" );
+                return;
+            }
+            
             if( server == "" )
             {
                 switch( type )
@@ -727,18 +777,40 @@ package library.circulate.networks
                 server += "/" + key + "/";
             }
             
-            if( !connected )
+            if( !_connection )
             {
                 _info( format( NetworkStrings.networkConnectingTo, {server:server} ) );
                 
                 _connection = new NetConnection();
                 _connection.maxPeerConnections = config.maxPeerConnections;
-                _connection.objectEncoding     = ObjectEncoding.AMF3; // we don't want this to be overridable 
+                _connection.objectEncoding     = ObjectEncoding.AMF3; // we don't want this to be overridable
                 
                 _connection.addEventListener( NetStatusEvent.NET_STATUS, onNetStatus );
-                _connection.connect( server );
-                
             }
+            
+            if( !connected )
+            {
+                _connection.connect( server );
+            }
+        }
+        
+        private function _destroy():void
+        {
+            if( connected )
+            {
+                disconnect();
+            }
+            
+            _destroyCommandCenter( true );
+            _leaveAlldNode( true );
+            _reset();
+            
+            _nodes = null;
+            
+            _connection.removeEventListener( NetStatusEvent.NET_STATUS, onNetStatus );
+            _connection = null;
+            
+            _nuked = true;
         }
         
         /**
@@ -748,7 +820,10 @@ package library.circulate.networks
         {
             _log( "Network.disconnect()" );
             
-            if( _connection )
+            /* note:
+               we do not destroy the connection, we just close it
+            */
+            if( _connection && connected )
             {
                 _connection.close();
             }
@@ -764,14 +839,14 @@ package library.circulate.networks
         * if lateryou try to create a NodeType.command with a different name
         * it will fail as youcan only have ONE CommandCenter.
         */
-        public function createNode( name:String, type:NodeType = null ):void
+        public function createNode( name:String, type:NodeType = null ):NetworkNode
         {
             _log( "Network.createNode( " + name + ", " + type + " )" );
             
             if( !connected )
             {
                 _info( "you need to connect first before joining a node." );
-                return;
+                return null;
             }
             
             if( !type ) { type = NodeType.chat; } 
@@ -797,13 +872,17 @@ package library.circulate.networks
                     {
 //                        trace( "CommandCenter already exists, we can only have one" );
                         joinNode( _commandCenter.name );
-                        return;
+                        return _commandCenter;
                     }
                     break;
                     
                     case NodeType.chat:
 //                    trace( "CREATE NodeType.chat" );
                     node = new ChatNode( this, name );
+                    break;
+                    
+                    case NodeType.stream:
+                    node = new StreamNode( this, name );
                     break;
                     
 //                    case NodeType.swarm:
@@ -820,12 +899,16 @@ package library.circulate.networks
                     _addNode( node );
                     
                     node.join();
+                    return node;
                 }
                 else
                 {
                     _error( "can not create this type of Node: " + type.toString() );
+                    return null;
                 }
             }
+            
+            return null;
         }
         
         public function hasNode( name:String ):Boolean
@@ -846,7 +929,7 @@ package library.circulate.networks
             return false;
         }
         
-        public function joinNode( name:String ):void
+        public function joinNode( name:String ):NetworkNode
         {
             _log( "Network.joinNode( " + name + " )" );
             
@@ -855,14 +938,16 @@ package library.circulate.networks
             if( node )
             {
                 node.join();
+                return node;
             }
             else
             {
                 _log( "Could not join Node \"" + name + "\"" );
+                return null;
             }
         }
         
-        public function leaveNode( name:String ):void
+        public function leaveNode( name:String ):NetworkNode
         {
             _log( "Network.leaveNode( " + name + " )" );
             
@@ -871,10 +956,12 @@ package library.circulate.networks
             if( node )
             {
                 node.leave();
+                return node;
             }
             else
             {
                 _log( "Could not leave Node \"" + name + "\"" );
+                return null;
             }
         }
         
@@ -887,23 +974,6 @@ package library.circulate.networks
                 _info( "you need to connect first before sending a message to a node." );
                 return;
             }
-            
-            if( !node && (command is ChatMessage) )
-            {
-                var chatmsg:ChatMessage = command as ChatMessage;
-                if( chatmsg.nodename != "" )
-                {
-                    var node2:NetworkNode = _findNode( chatmsg.nodename );
-                    if( node2 )
-                    {
-                        node = node2;
-                    }
-                    
-                    //chatmsg.destination = node2.groupAddress;
-                }
-            }
-            
-            var groupAddress:String;
             
             if( node )
             {
@@ -927,6 +997,13 @@ package library.circulate.networks
         {
             return _findNode( name );
         }
+        
+        /**
+        * Completely destroy the current network
+        * can not be reversed
+        * this is meant to clean up memory
+        */
+        public function destroy():void { _destroy(); }
         
         public function resetTimeout():void
         {
