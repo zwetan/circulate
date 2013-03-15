@@ -8,22 +8,18 @@ package library.circulate.nodes
     import flash.net.GroupSpecifier;
     import flash.net.NetGroup;
     import flash.net.NetGroupReceiveMode;
-    import flash.net.NetGroupSendMode;
     import flash.net.NetGroupSendResult;
-    import flash.utils.Dictionary;
+    import flash.net.NetStream;
     
-    import flashx.textLayout.events.UpdateCompleteEvent;
-    
-    import library.circulate.AutomaticDistributedElection;
+    import library.circulate.RingTopology;
     import library.circulate.NetworkClient;
     import library.circulate.NetworkCommand;
     import library.circulate.NetworkNode;
     import library.circulate.NetworkStrings;
+    import library.circulate.NetworkSystem;
     import library.circulate.NodeType;
-    import library.circulate.Packet;
+    import library.circulate.data.Packet;
     import library.circulate.clients.Client;
-    import library.circulate.commands.ChatMessage;
-    import library.circulate.commands.JoinNode;
     import library.circulate.commands.KeepAlive;
     import library.circulate.events.ClientEvent;
     import library.circulate.events.NeighborEvent;
@@ -45,13 +41,13 @@ package library.circulate.nodes
         protected var _isElected:Boolean;
         protected var _groupAddress:String;
         
-        protected var _network:Network;
+        protected var _network:NetworkSystem;
         protected var _group:NetGroup;
         protected var _specifier:GroupSpecifier;
         
-        private var _clients:Vector.<NetworkClient>;
+        protected var _clients:Vector.<NetworkClient>;
         
-        public function Node( network:Network, name:String = "", specifier:GroupSpecifier = null )
+        public function Node( network:NetworkSystem, name:String = "", specifier:GroupSpecifier = null )
         {
             if( !specifier )
             {
@@ -67,14 +63,6 @@ package library.circulate.nodes
             _log( "Node.ctor( \"" + name + "\" )" );
         }
         
-        private function _reset():void
-        {
-            _log( "Node._reset()" );
-            
-            _joined    = false;
-            _isElected = false;
-            _clients   = new Vector.<NetworkClient>();
-        }
         
         //--- events ---
         
@@ -82,10 +70,6 @@ package library.circulate.nodes
         {
             var code:String   = event.info.code;
             var reason:String = "";
-            
-            //trace( dump( event, true ) );
-            
-//            _log( _type.toString() + " [" + name + "]"  + " netstatus code: " + event.info.code );
             
             _log( "Node.onNetStatus( " + event.info.code + " )" );
             
@@ -99,7 +83,7 @@ package library.circulate.nodes
                    The info.peerID:String property is the peer ID of the neighbor.
                 */
                 case "NetGroup.Neighbor.Connect": // event.info.neighbor, event.info.peerID
-                onNeighborConnect( event.info.peerID, event.info.neighbor );
+                doNeighborConnect( event.info.peerID, event.info.neighbor );
                 break;
                 
                 /* Sent when a neighbor disconnects from this node.
@@ -107,14 +91,14 @@ package library.circulate.nodes
                    The info.peerID:String property is the peer ID of the neighbor.
                 */
                 case "NetGroup.Neighbor.Disconnect": // event.info.neighbor, event.info.peerID
-                onNeighborDisconnect( event.info.peerID, event.info.neighbor );
+                doNeighborDisconnect( event.info.peerID, event.info.neighbor );
                 break;
                 
                 /* Sent when a portion of the group address space for
                    which this node is responsible changes.
                 */
                 case "NetGroup.LocalCoverage.Notify":
-                onLocalCoverageNotify();
+                doLocalCoverageNotify();
                 break;
                 
                 /* Sent when a message directed to this node is received.
@@ -128,7 +112,7 @@ package library.circulate.nodes
                 */
                 case "NetGroup.SendTo.Notify": // event.info.message, event.info.from, event.info.fromLocal
                 _log( "NetGroup.SendTo.Notify( " + event.info.from + ", " + event.info.message + ", " + event.info.fromLocal + " )" );
-                onSendToNotify( event.info.from, event.info.message, event.info.fromLocal );
+                doSendToNotify( event.info.from, event.info.message, event.info.fromLocal );
                 break;
                 
                 /* Sent when a new Group Posting is received.
@@ -136,9 +120,50 @@ package library.circulate.nodes
                    The info.messageID:String property is this message's messageID.
                 */
                 case "NetGroup.Posting.Notify": // event.info.message, event.info.messageID
-                onPostingNotify( event.info.messageID, event.info.message );
+                doPostingNotify( event.info.messageID, event.info.message );
                 break;
                 
+                
+                /* ---- NetGroup.Replication ---- */
+                
+                /* Sent when a fetch request for an object
+                   (previously announced with NetGroup.Replication.Fetch.SendNotify)
+                   fails or is denied.
+                   A new attempt for the object will be made if it is still wanted.
+                   The info.index:Number property is the index of the object that had been requested.
+                */
+                case "NetGroup.Replication.Fetch.Failed": // event.info.index
+                doReplicationFetchFailed( event.info.index );
+                break;
+                
+                /* Sent when a fetch request was satisfied by a neighbor.
+                   The info.index:Number property is the object index of this result.
+                   The info.object:Object property is the value of this object.
+                   This index will automatically be removed from the Want set.
+                   If the object is invalid, this index can be re-added to the Want set with NetGroup.addWantObjects().
+                */
+                case "NetGroup.Replication.Fetch.Result": // event.info.index, event.info.object
+                doReplicationFetchResult( event.info.index, event.info.object );
+                break;
+                
+                /* Sent when the Object Replication system is about to send a request for an object to a neighbor.
+                   The info.index:Number property is the index of the object that is being requested.
+                */
+                case "NetGroup.Replication.Fetch.SendNotify": // event.info.index
+                doReplicationFetchSendNotify( event.info.index );
+                break;
+                
+                /* Sent when a neighbor has requested an object that this node has announced with NetGroup.addHaveObjects().
+                   This request must eventually be answered with either NetGroup.writeRequestedObject()
+                   or NetGroup.denyRequestedObject().
+                   Note that the answer may be asynchronous.
+                   The info.index:Number property is the index of the object that has been requested.
+                   The info.requestID:int property is the ID of this request,
+                   to be used by NetGroup.writeRequestedObject() or NetGroup.denyRequestedObject().
+                */
+                case "NetGroup.Replication.Request": // event.info.index, event.info.requestID
+                doReplicationRequest( event.info.index, event.info.requestID );
+                break;
             }
             
         }
@@ -146,7 +171,7 @@ package library.circulate.nodes
         
         //--- netstatus actions ---
         
-        private function onNeighborConnect( peerID:String, address:String ):void
+        private function doNeighborConnect( peerID:String, address:String ):void
         {
             _log( "Node.onNeighborConnect( " + peerID + ", " + address + " )" );
             
@@ -164,7 +189,7 @@ package library.circulate.nodes
             dispatchEvent( neighborevent );
         }
         
-        private function onNeighborDisconnect( peerID:String, address:String ):void
+        private function doNeighborDisconnect( peerID:String, address:String ):void
         {
             _log( "Node.onNeighborDisconnect( " + peerID + ", " + address + " )" );
             
@@ -179,49 +204,19 @@ package library.circulate.nodes
             dispatchEvent( neighborevent );
         }
         
-        private function onLocalCoverageNotify():void
+        private function doLocalCoverageNotify():void
         {
             _log( "Node.onLocalCoverageNotify()" );
             
             _runElection();
         }
         
-        private function _runElection():void
-        {
-			var rangeFrom:String = _group.localCoverageFrom;
-			var rangeTo:String   = _group.localCoverageTo;
-			var election:Boolean = AutomaticDistributedElection.triangulate( rangeFrom, rangeTo );
-			
-            if( election != _isElected )
-            {
-                _log( "Election change: " + (election ? "elected" : "not elected") );
-                
-                var client:NetworkClient = _network.client;
-                    client.elected = election;
-                
-                var now:Date = new Date();
-                _network.client.idleTime = now;
-                var cmd:KeepAlive = new KeepAlive();
-                    cmd.username  = client.username;
-                    cmd.peerID    = client.peerID;
-                    cmd.address   = groupAddress;
-                    cmd.elected   = client.elected;
-                    cmd.arrived   = client.arrivedTime;
-                    cmd.idle      = client.idleTime;
-                    cmd.timestamp = now.valueOf();
-                    
-                
-                var clientevent:ClientEvent = new ClientEvent( ClientEvent.UPDATED, client );
-                dispatchEvent( clientevent );
-                sendToAll( cmd );
-                //post( cmd );
-            }
-            
-            _isElected = election;
-            _log( "isElected = " + _isElected );
-        }
-        
-        private function onPostingNotify( id:String, message:Object ):void
+        /* note:
+           
+           id      - event.info.messageID - is the message ID ( the hexadecmial of the SHA256 of the raw bytes of the serialization of the message.)
+           message - event.info.message   - is the message
+        */
+        private function doPostingNotify( id:String, message:Object ):void
         {
             _log( "Node.onPostingNotify( " + id + ", " + message + " )" );
             
@@ -250,8 +245,6 @@ package library.circulate.nodes
                    is always resolvedto "null" (strange, bug?)
                 */
                 _log( "cmd is null" );
-                //var groupAddress:String = _group.convertPeerIDToGroupAddress( _network.client.peerID );
-                //sendToNearest( cmd, groupAddress );
             }
             
         }
@@ -265,7 +258,7 @@ package library.circulate.nodes
            To implement recursive routing, the message must be resent with NetGroup.sendToNearest()
            if info.fromLocal is FALSE.
         */
-        private function onSendToNotify( address:String, message:Object, isLocal:Boolean = false ):void
+        private function doSendToNotify( address:String, message:Object, isLocal:Boolean = false ):void
         {
             _log( "Node.onSendToNotify( " + address + ", " + message + ", " + isLocal + " )" );
             
@@ -316,41 +309,33 @@ package library.circulate.nodes
                     sendToNearest( cmd, cmd.destination );
                 }
                 
-                
-                
-//                if( isLocal )
-//                {
-//                    _log( "command roundtriped back to you" );
-////                    if( _network.config.loopback )
-////                    {
-////                        cmd.execute( _network, this );
-////                    }
-//                }
-//                else
-//                {
-//                    cmd.execute( _network, this );
-//                    
-//                    //sendToNearest( cmd, address, true );
-//                    //sendToNeighbor( cmd, NetGroupSendMode.NEXT_INCREASING );
-//                }
-                
-                //sendToNeighbor( cmd, NetGroupSendMode.NEXT_INCREASING );
-                //sendToNeighbor( cmd, NetGroupSendMode.NEXT_DECREASING );
-                //sendToNearest( cmd, address );
             }
             else
             {
                 _log( "cmd is null" );
-//                var empty:NetworkCommand = new ChatMessage( "", address, "", "" );
-//                //sendToAll( empty );
-//                sendToAllNeighbors( empty );
-                var empty:NetworkCommand = new ChatMessage( "", address, "", "" );
-                    empty.destination = address;
-                sendTo( address, empty );
             }
             
         }
         
+        protected function doReplicationFetchFailed( index:Number ):void
+        {
+            _log( "Node.doReplicationFetchFailed( " + index + " )" );
+        }
+        
+        protected function doReplicationFetchResult( index:Number, data:Object ):void
+        {
+            _log( "Node.doReplicationFetchResult( " + index + ", " + data + " )" );
+        }
+        
+        protected function doReplicationFetchSendNotify( index:Number ):void
+        {
+            _log( "Node.doReplicationFetchSendNotify( " + index + " )" );
+        }
+        
+        protected function doReplicationRequest( index:Number, requestID:int ):void
+        {
+            _log( "Node.doReplicationRequest( " + index + ", " + requestID + " )" );
+        }
         
         //--- private ---
         
@@ -364,6 +349,55 @@ package library.circulate.nodes
             }
 
 //            log( message );
+        }
+        
+        private function _reset():void
+        {
+            _log( "Node._reset()" );
+            
+            _joined    = false;
+            _isElected = false;
+            _clients   = new Vector.<NetworkClient>();
+        }
+        
+        private function _destroy():void
+        {
+            _clients = null;
+        }
+        
+        private function _runElection():void
+        {
+			var rangeFrom:String = _group.localCoverageFrom;
+			var rangeTo:String   = _group.localCoverageTo;
+			var election:Boolean = RingTopology.triangulate( rangeFrom, rangeTo );
+			
+            if( election != _isElected )
+            {
+                _log( "Election change: " + (election ? "elected" : "not elected") );
+                
+                var client:NetworkClient = _network.client;
+                    client.elected = election;
+                
+                var now:Date = new Date();
+                _network.client.idleTime = now;
+                var cmd:KeepAlive = new KeepAlive();
+                    cmd.username  = client.username;
+                    cmd.peerID    = client.peerID;
+                    cmd.address   = groupAddress;
+                    cmd.elected   = client.elected;
+                    cmd.arrived   = client.arrivedTime;
+                    cmd.idle      = client.idleTime;
+                    cmd.timestamp = now.valueOf();
+                    
+                
+                var clientevent:ClientEvent = new ClientEvent( ClientEvent.UPDATED, client );
+                dispatchEvent( clientevent );
+                sendToAll( cmd );
+                //post( cmd );
+            }
+            
+            _isElected = election;
+            _log( "isElected = " + _isElected );
         }
         
         private function _addClient( client:NetworkClient ):void
@@ -399,14 +433,6 @@ package library.circulate.nodes
             var clientevent:ClientEvent = new ClientEvent( ClientEvent.REMOVED, client );
             dispatchEvent( clientevent );
         }
-        
-//        public var onRemoveClientHook:Function;
-//        
-//        protected function onRemoveClient( client:NetworkClient ):void
-//        {
-//            trace( "onRemoveClient()" );
-//            onRemoveClientHook( client );
-//        }
         
         private function _removeAllClient():void
         {
@@ -519,7 +545,7 @@ package library.circulate.nodes
         //--- protected ---
         
         /* Those methods are meant to be overrided to customize
-           the behaviour ofthe NetworkNode
+           the behaviour of the NetworkNode
         */
         
         protected function setReceiveMode():void
@@ -528,11 +554,14 @@ package library.circulate.nodes
             _group.receiveMode = NetGroupReceiveMode.EXACT;
         }
         
+        
+        //DELETE
         protected function onNeighborConnectAction( peerID:String, address:String ):void
         {
             _log( "Node.onNeighborConnectAction( " + peerID + ", " + address + " )" );
         }
         
+        //DELETE
         protected function onNeighborDisconnectAction( peerID:String, address:String, username:String ):void
         {
             _log( "Node.onNeighborDisconnectAction( " + peerID + ", " + address + ", " + username + " )" );
@@ -540,6 +569,13 @@ package library.circulate.nodes
         
         /* note:
            Sends a message to all members of a group.
+           
+           All messages must be unique.
+           A message that is identical to one posted earlier might not be propagated.
+           Use a sequence number to make messages unique. (UniquePacket take care of that
+
+           Message delivery is not ordered.
+           Message delivery is not guaranteed.
         */
         protected function post( command:NetworkCommand ):String
         {
@@ -655,7 +691,7 @@ package library.circulate.nodes
             return result;
         }
         
-        protected function onMessageRouted( result:String ):void
+        protected function afterMessageRouted( result:String ):void
         {
             switch( result )
             {
@@ -673,7 +709,7 @@ package library.circulate.nodes
             }
         }
         
-        protected function onMessagePosted( messageID:String ):void
+        protected function afterMessagePosted( messageID:String ):void
         {
            if( messageID )
             {
@@ -688,10 +724,16 @@ package library.circulate.nodes
         
         //--- public ---
         
+        /* note:
+           what we can consider the public API
+           or the implementation of NetworkNode
+        */
+        
         public function get type():NodeType { return _type; }
         public function get name():String { return _name; }
         public function get specificier():GroupSpecifier { return _specifier; }
         public function get group():NetGroup { return _group; }
+        public function get stream():NetStream { return null; }
         public function get joined():Boolean { return _joined; }
         public function get isElected():Boolean { return _isElected; }
         
@@ -715,6 +757,8 @@ package library.circulate.nodes
             return _groupAddress;
         }
         
+        public function get streamAddress():String { return ""; }
+        
         public function get clients():Vector.<NetworkClient> { return _clients; }
         
         public function get estimatedMemberCount():uint
@@ -733,6 +777,10 @@ package library.circulate.nodes
             
             return _findClientByPeerID( peerID );
         }
+        
+        public function addLocalClient():void { _log( "Node.addLocalClient()" ); _addLocalClient(); }
+        
+        public function removeLocalClient():void { _log( "Node.removeLocalClient()" ); _removeLocalClient(); }
         
         public function join( password:String = "" ):void
         {
@@ -794,18 +842,18 @@ package library.circulate.nodes
                 var result:String = sendToAllNeighbors( command );
                 //var result:String = sendToNearest( command, _groupAddress );
                 //var result:String = sendToNeighbor( command, NetGroupSendMode.NEXT_DECREASING );
-                onMessageRouted( result );
+                afterMessageRouted( result );
             }
             else
             {
                 var messageID:String = post( command );
-                onMessagePosted( messageID );
+                afterMessagePosted( messageID );
             }
             
-//            if( _network.config.loopback )
-//            {
-//                command.execute( _network, this );
-//            }
+            if( _network.config.loopback )
+            {
+                command.execute( _network, this );
+            }
             
         }
         
@@ -834,8 +882,12 @@ package library.circulate.nodes
             sendToNearest( command, address );
         }
         
-        public function addLocalClient():void { _log( "Node.addLocalClient()" ); _addLocalClient(); }
-        public function removeLocalClient():void { _log( "Node.removeLocalClient()" ); _removeLocalClient(); }
+        /**
+        * Completely destroy the current node
+        * can not be reversed
+        * this is meant to clean up memory
+        */
+        public function destroy():void { _destroy(); }
         
     }
 }
