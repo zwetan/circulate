@@ -10,7 +10,7 @@ package
     import flash.geom.Point;
     import flash.utils.Dictionary;
     
-    import library.circulate.AutomaticDistributedElection;
+    import library.circulate.RingTopology;
     import library.circulate.NetworkClient;
     import library.circulate.RingSpan;
     

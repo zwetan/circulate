@@ -9,7 +9,7 @@ package
     import flash.text.TextFieldAutoSize;
     import flash.text.TextFormat;
     
-    import library.circulate.AutomaticDistributedElection;
+    import library.circulate.RingTopology;
     import library.circulate.NetworkClient;
     import library.circulate.RingSpan;
     
@@ -186,7 +186,7 @@ package
             var position:int   = 0; //align center of span
             var correctAngle:Boolean = true; //to slightly alterate the pos of the circle so for the same address span the 2 circle does not cover each other
             var correctDistance:Boolean = true;
-            var translatePoint:Point = AutomaticDistributedElection.getCirclePosition( address, distance, position, correctAngle, correctDistance );
+            var translatePoint:Point = RingTopology.getCirclePosition( address, distance, position, correctAngle, correctDistance );
             this.x = translatePoint.x;
             this.y = translatePoint.y;            
         }
