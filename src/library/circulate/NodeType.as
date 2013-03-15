@@ -7,6 +7,8 @@ package library.circulate
         public static const swarm:NodeType   = new NodeType( 0x021, "swarm" );
         public static const onefile:NodeType = new NodeType( 0x022, "onefile" );
         
+        public static const stream:NodeType = new NodeType( 0x077, "stream" );
+        
         private var _value:uint;
         private var _name:String;
         
