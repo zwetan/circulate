@@ -9,7 +9,7 @@ package library.circulate.commands
     import library.circulate.NetworkCommand;
     import library.circulate.NetworkNode;
     import library.circulate.NetworkSystem;
-    import library.circulate.UniquePacket;
+    import library.circulate.data.UniquePacket;
     import library.circulate.networks.Network;
     
     registerClassAlias( "library.circulate.commands.ChatMessage", ChatMessage );
