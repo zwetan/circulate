@@ -268,10 +268,13 @@ package
         
         private function _colorize( target:DisplayObject, color:uint ):void
         {
-            var ct:ColorTransform = new ColorTransform();
-                ct.color = color;
-            
-            target.transform.colorTransform = ct;
+            if( target )
+            {
+                var ct:ColorTransform = new ColorTransform();
+                    ct.color = color;
+                
+                target.transform.colorTransform = ct;
+            }
         }
         
         public function updateConnection( color:uint ):void
