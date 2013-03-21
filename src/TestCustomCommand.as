@@ -84,5 +84,7 @@ package
                 _log( "<" + client.username + "> moved object to x=" + x + ", y=" + y );
             }
         }
+        
+        public function toString():String { return ""; }
     }
 }
