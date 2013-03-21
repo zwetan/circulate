@@ -13,6 +13,9 @@ package library.circulate.commands
     
     registerClassAlias( "library.circulate.commands.ClientList", ClientList );
     
+    /* note:
+       to send a list of clients known on the network
+    */
     public class ClientList implements NetworkCommand
     {
         private var _destination:String = "";
@@ -31,11 +34,7 @@ package library.circulate.commands
         
         public function get isRouted():Boolean
         {
-            if( destination != "" )
-            {
-                return true;
-            }
-            
+            if( destination != "" ) { return true; }
             return false;
         }
         
@@ -56,5 +55,7 @@ package library.circulate.commands
             }
             
         }
+        
+        public function toString():String { return ""; }
     }
 }

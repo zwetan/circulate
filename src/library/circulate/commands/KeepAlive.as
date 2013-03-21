@@ -13,6 +13,10 @@ package library.circulate.commands
     
     registerClassAlias( "library.circulate.commands.KeepAlive", KeepAlive );
     
+    /* note:
+       to senda beacon of your client information on the network
+       eg. "hey I'm here, I'm still alive"
+    */
     public class KeepAlive implements NetworkCommand
     {
         private var _destination:String = "";
@@ -96,5 +100,7 @@ package library.circulate.commands
                 var clientevent:ClientEvent = new ClientEvent( ClientEvent.UPDATED, client );
                 node.dispatchEvent( clientevent );
         }
+        
+        public function toString():String { return ""; }
     }
 }

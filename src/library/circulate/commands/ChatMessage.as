@@ -105,5 +105,6 @@ package library.circulate.commands
             _log( msg );
         }
         
+        public function toString():String { return ""; }
     }
 }

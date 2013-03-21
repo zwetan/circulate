@@ -79,5 +79,7 @@ package library.circulate.commands
 //            network.sendCommandToNode( syscmd, network.commandCenter );
             
         }
+        
+        public function toString():String { return ""; }
     }
 }

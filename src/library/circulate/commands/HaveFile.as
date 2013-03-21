@@ -5,11 +5,11 @@ package library.circulate.commands
     import library.circulate.NetworkSystem;
     
     /* note:
-       tell other you havestarted sharing a file
+       to tell others you can share a file even if not already shared
     */
-    public class AnnounceFile implements NetworkCommand
+    public class HaveFile implements NetworkCommand
     {
-        public function AnnounceFile()
+        public function HaveFile()
         {
         }
         
