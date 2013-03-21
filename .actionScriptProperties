@@ -33,6 +33,7 @@
     <sourceAttachmentPath/>
   </compiler>
   <applications>
+    <application path="circulate_cam.as"/>
     <application path="circulate_test.as"/>
     <application path="circulate_ui.as"/>
   </applications>
