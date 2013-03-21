@@ -72,5 +72,7 @@ package library.circulate
         * long switch between command type/name.
         */
         function execute( network:NetworkSystem, node:NetworkNode ):void;
+        
+        function toString():String;
     }
 }
